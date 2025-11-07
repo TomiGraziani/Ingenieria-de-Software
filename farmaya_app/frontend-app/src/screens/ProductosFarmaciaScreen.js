@@ -1,20 +1,22 @@
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator, 
-  Alert 
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
+import * as DocumentPicker from "expo-document-picker";
 
 export default function ProductosFarmaciaScreen({ route, navigation }) {
   const { farmacia } = route.params;
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [procesandoPedido, setProcesandoPedido] = useState(false);
 
   // 🔹 Obtener productos de esa farmacia
   useEffect(() => {
@@ -33,25 +35,87 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     fetchProductos();
   }, []);
 
+  const solicitarReceta = () =>
+    new Promise((resolve) => {
+      const abrirPicker = async () => {
+        try {
+          const result = await DocumentPicker.getDocumentAsync({
+            type: ["image/*", "application/pdf"],
+            copyToCacheDirectory: true,
+          });
+
+          if (result.canceled) {
+            Alert.alert(
+              "Receta obligatoria",
+              "Debés adjuntar una receta para continuar con el pedido."
+            );
+            resolve(null);
+            return;
+          }
+
+          resolve(result.assets[0]);
+        } catch (error) {
+          console.error("Error al seleccionar receta:", error);
+          Alert.alert("Error", "No se pudo seleccionar el archivo de la receta.");
+          resolve(null);
+        }
+      };
+
+      Alert.alert(
+        "Receta necesaria",
+        "Este medicamento requiere que adjuntes una receta médica.",
+        [
+          { text: "Cancelar", style: "cancel", onPress: () => resolve(null) },
+          { text: "Adjuntar receta", onPress: () => abrirPicker() },
+        ],
+        { cancelable: false }
+      );
+    });
+
   // 🔹 Crear pedido en el backend
   const realizarPedido = async (producto) => {
     try {
-      const token = await AsyncStorage.getItem("accessToken");
-      if (!token) {
-        Alert.alert("Sesión expirada", "Por favor, iniciá sesión nuevamente.");
+      if (procesandoPedido) {
         return;
       }
 
-      const payload = {
-        producto_id: producto.id,
-        cantidad: 1,
-        direccion_entrega: "Entrega a domicilio",
-        metodo_pago: "efectivo",
-      };
+      setProcesandoPedido(true);
 
-      // ✅ Ruta corregida con el ID de la farmacia
-      const response = await API.post(`pedidos/crear/${farmacia.id}/`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
+      let recetaAdjunta = null;
+      if (producto.requiere_receta) {
+        recetaAdjunta = await solicitarReceta();
+        if (!recetaAdjunta) {
+          setProcesandoPedido(false);
+          return;
+        }
+      }
+
+      const token = await AsyncStorage.getItem("accessToken");
+      if (!token) {
+        Alert.alert("Sesión expirada", "Por favor, iniciá sesión nuevamente.");
+        setProcesandoPedido(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("producto", String(producto.id));
+      formData.append("cantidad", "1");
+      formData.append("direccion_entrega", "Entrega a domicilio");
+      formData.append("metodo_pago", "efectivo");
+
+      if (recetaAdjunta) {
+        formData.append("receta_archivo", {
+          uri: recetaAdjunta.uri,
+          name: recetaAdjunta.name || `receta-${Date.now()}`,
+          type: recetaAdjunta.mimeType || "image/jpeg",
+        });
+      }
+
+      const response = await API.post("pedidos/", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       Alert.alert(
@@ -65,6 +129,8 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
         "Error",
         error.response?.data?.detail || "No se pudo realizar el pedido."
       );
+    } finally {
+      setProcesandoPedido(false);
     }
   };
 
@@ -111,10 +177,14 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
             }
           >
             <Text style={styles.nombre}>{item.nombre}</Text>
+            {item.presentacion ? (
+              <Text style={styles.presentacion}>💊 {item.presentacion}</Text>
+            ) : null}
             {item.descripcion ? (
               <Text style={styles.descripcion}>{item.descripcion}</Text>
             ) : null}
             <Text style={styles.precio}>💰 ${item.precio}</Text>
+            <Text style={styles.stock}>📦 Stock disponible: {item.stock}</Text>
             {item.requiere_receta && (
               <Text style={styles.receta}>📜 Requiere receta</Text>
             )}
@@ -138,8 +208,10 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
   },
   nombre: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  presentacion: { fontSize: 13, color: "#555", marginTop: 2 },
   descripcion: { fontSize: 13, color: "#555", marginVertical: 4 },
   precio: { fontSize: 14, fontWeight: "600", color: "#2E7D32" },
+  stock: { fontSize: 12, color: "#333", marginTop: 4 },
   receta: { fontSize: 12, color: "red" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 16 },

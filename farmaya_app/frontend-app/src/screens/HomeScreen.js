@@ -1,12 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import API from '../api/api';
 
 export default function HomeScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('Usuario');
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const loadUserAndConfigureHeader = async () => {
@@ -39,60 +37,13 @@ export default function HomeScreen({ navigation }) {
   }, [navigation]);
 
   // 🔹 Subir receta al backend
-  const handleUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        Alert.alert('Cancelado', 'No seleccionaste ningún archivo.');
-        return;
-      }
-
-      const file = result.assets[0];
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente.');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('imagen', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType,
-      });
-
-      setUploading(true);
-
-      // ✅ Subida real al backend
-      const response = await API.post('accounts/recetas/', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      setUploading(false);
-      Alert.alert('✅ Receta subida', 'Tu receta fue enviada correctamente.');
-      console.log('Respuesta backend:', response.data);
-    } catch (error) {
-      setUploading(false);
-      console.error('Error al subir receta:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudo subir la receta.');
-    }
-  };
-
-  if (uploading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E88E5" />
-        <Text>Subiendo receta...</Text>
-      </View>
+  const handleUpload = () => {
+    Alert.alert(
+      '¿Cómo subo mi receta?',
+      'Cuando solicites un medicamento que requiera receta podrás adjuntar la foto o el PDF durante el pedido. '
+        + 'Solo elegí el producto desde la farmacia y seguí los pasos del pedido para cargarla allí.'
     );
-  }
+  };
 
   return (
     <View style={styles.container}>

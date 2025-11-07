@@ -12,7 +12,8 @@ class Producto(models.Model):
     presentacion = models.CharField(max_length=50)  # 💊 Ejemplo: "500 mg", "200 ml"
     descripcion = models.TextField(blank=True)
     precio = models.DecimalField(max_digits=8, decimal_places=2)
-    necesita_receta = models.BooleanField(default=False)
+    stock = models.PositiveIntegerField(default=0)
+    requiere_receta = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.nombre} ({self.presentacion}) - {self.farmacia.nombre}"

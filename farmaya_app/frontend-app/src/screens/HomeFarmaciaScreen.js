@@ -11,6 +11,7 @@ import {
   TextInput,
   Switch,
   ScrollView,
+  Linking,
 } from "react-native";
 import API from "../api/api";
 
@@ -19,11 +20,13 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const [productos, setProductos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pedidoProcesando, setPedidoProcesando] = useState(null);
 
   // Modal de edición
   const [modalVisible, setModalVisible] = useState(false);
   const [productoEdit, setProductoEdit] = useState(null);
   const [nombre, setNombre] = useState("");
+  const [presentacion, setPresentacion] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
@@ -84,6 +87,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const abrirEdicion = (producto) => {
     setProductoEdit(producto);
     setNombre(producto.nombre);
+    setPresentacion(producto.presentacion || "");
     setDescripcion(producto.descripcion || "");
     setPrecio(String(producto.precio));
     setStock(String(producto.stock));
@@ -96,6 +100,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
     try {
       await API.put(`productos/${productoEdit.id}/`, {
         nombre,
+        presentacion,
         descripcion,
         precio: parseFloat(precio),
         stock: parseInt(stock),
@@ -119,6 +124,54 @@ export default function HomeFarmaciaScreen({ navigation }) {
       setLoading(false);
     })();
   }, []);
+
+  const abrirReceta = async (url) => {
+    if (!url) {
+      Alert.alert("Receta no disponible", "El pedido no tiene una receta adjunta.");
+      return;
+    }
+
+    try {
+      const soportado = await Linking.canOpenURL(url);
+      if (!soportado) {
+        Alert.alert(
+          "No se pudo abrir",
+          "No encontramos una aplicación para visualizar la receta adjunta."
+        );
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error("Error al abrir receta:", error);
+      Alert.alert("Error", "No se pudo abrir la receta. Intentá nuevamente.");
+    }
+  };
+
+  const actualizarEstadoPedido = async (id, nuevoEstado) => {
+    try {
+      setPedidoProcesando(id);
+      await API.patch(`pedidos/${id}/`, { estado: nuevoEstado });
+      setPedidos((prev) =>
+        prev.map((pedido) =>
+          pedido.id === id ? { ...pedido, estado: nuevoEstado } : pedido
+        )
+      );
+
+      if (nuevoEstado === "aprobado") {
+        Alert.alert("Pedido aceptado", "Confirmaste la preparación del pedido.");
+      } else {
+        Alert.alert("Pedido rechazado", "Notificamos al cliente sobre el rechazo.");
+      }
+    } catch (error) {
+      console.error("Error al actualizar pedido:", error.response?.data || error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.detail || "No se pudo actualizar el pedido."
+      );
+    } finally {
+      setPedidoProcesando(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -153,9 +206,41 @@ export default function HomeFarmaciaScreen({ navigation }) {
         pedidos.map((p) => (
           <View key={p.id} style={styles.cardPedido}>
             <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
-            <Text>Cliente: {p.usuario?.nombre || "Anónimo"}</Text>
+            <Text>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
             <Text>Producto: {p.producto_nombre}</Text>
-            <Text>Estado: {p.estado}</Text>
+            <Text>Cantidad: {p.cantidad}</Text>
+            <Text>Método de pago: {p.metodo_pago}</Text>
+            <Text style={styles.estado}>Estado: {p.estado}</Text>
+
+            {p.receta?.archivo_url && (
+              <TouchableOpacity
+                style={styles.btnSecundario}
+                onPress={() => abrirReceta(p.receta.archivo_url)}
+              >
+                <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.accionesPedido}>
+              <TouchableOpacity
+                style={[styles.btnPedido, styles.btnAceptar]}
+                disabled={pedidoProcesando === p.id || p.estado === "aprobado"}
+                onPress={() => actualizarEstadoPedido(p.id, "aprobado")}
+              >
+                <Text style={styles.btnPedidoText}>
+                  {pedidoProcesando === p.id && p.estado !== "aprobado"
+                    ? "Procesando..."
+                    : "Aceptar"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnPedido, styles.btnRechazar]}
+                disabled={pedidoProcesando === p.id || p.estado === "cancelado"}
+                onPress={() => actualizarEstadoPedido(p.id, "cancelado")}
+              >
+                <Text style={styles.btnPedidoText}>Rechazar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ))
       )}
@@ -179,6 +264,9 @@ export default function HomeFarmaciaScreen({ navigation }) {
             <View style={styles.card}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardNombre}>{item.nombre}</Text>
+                {item.presentacion ? (
+                  <Text>💊 Presentación: {item.presentacion}</Text>
+                ) : null}
                 <Text>💰 ${item.precio}</Text>
                 <Text>📦 Stock: {item.stock}</Text>
                 <Text>
@@ -209,6 +297,12 @@ export default function HomeFarmaciaScreen({ navigation }) {
               value={nombre}
               onChangeText={setNombre}
               placeholder="Nombre"
+            />
+            <TextInput
+              style={styles.input}
+              value={presentacion}
+              onChangeText={setPresentacion}
+              placeholder="Presentación"
             />
             <TextInput
               style={styles.input}
@@ -277,16 +371,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cardPedido: {
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "#fff",
     padding: 15,
     borderRadius: 10,
-    marginBottom: 10,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardTitle: { fontWeight: "bold", fontSize: 16, marginBottom: 5 },
+  estado: { marginTop: 4, fontWeight: "600" },
   cardNombre: { fontSize: 18, fontWeight: "bold" },
   cardActions: { flexDirection: "row", marginLeft: 10 },
   btnEditar: { fontSize: 22, marginHorizontal: 6 },
   btnEliminar: { fontSize: 22, marginHorizontal: 6, color: "red" },
+  btnSecundario: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#e3f2fd",
+    alignSelf: "flex-start",
+  },
+  btnSecundarioText: {
+    color: "#1565c0",
+    fontWeight: "600",
+  },
+  accionesPedido: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+    gap: 10,
+  },
+  btnPedido: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  btnAceptar: {
+    backgroundColor: "#43a047",
+  },
+  btnRechazar: {
+    backgroundColor: "#e53935",
+  },
+  btnPedidoText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
