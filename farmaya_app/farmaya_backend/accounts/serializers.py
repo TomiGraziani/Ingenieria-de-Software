@@ -60,6 +60,18 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Ese correo ya se encuentra en uso.')
         return normalized_email
 
+    def validate(self, attrs):
+        tipo_usuario = attrs.get('tipo_usuario')
+        telefono = attrs.get('telefono')
+
+        if tipo_usuario == 'farmacia':
+            if not telefono or not str(telefono).strip():
+                raise serializers.ValidationError({
+                    'telefono': 'Las farmacias deben proporcionar un teléfono de contacto.'
+                })
+
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(**validated_data)

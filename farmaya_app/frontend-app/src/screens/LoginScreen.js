@@ -1,12 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View, Alert, ActivityIndicator } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import API from '../api/api';
+import { useTheme } from '../theme/ThemeProvider';
 
 export default function LoginScreen({ navigation }) {
+  const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const styles = createStyles(theme);
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validatePassword = (password) => password.length >= 6;
@@ -67,49 +80,142 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Iniciar sesión</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.card}>
+          <Text style={styles.tagline}>Bienvenido de nuevo</Text>
+          <Text style={styles.title}>Iniciar sesión</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ingresá tu correo"
+            placeholderTextColor={theme.colors.textSecondary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+          <Text style={styles.label}>Contraseña</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ingresá tu contraseña"
+            placeholderTextColor={theme.colors.textSecondary}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#1E88E5" style={{ marginVertical: 15 }} />
-      ) : (
-        <Button title="Ingresar" onPress={handleLogin} color="#1E88E5" />
-      )}
+          {loading ? (
+            <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
+          ) : (
+            <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+              <Text style={styles.primaryButtonText}>Ingresar</Text>
+            </TouchableOpacity>
+          )}
 
-      <Text style={styles.link} onPress={() => navigation.navigate('Register')}>
-        ¿No tenés cuenta? Registrate
-      </Text>
-    </View>
+          <Text style={styles.footerText}>¿No tenés cuenta?</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.linkButton}>
+            <Text style={styles.link}>Registrate</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#1E88E5' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  link: { color: '#1E88E5', textAlign: 'center', marginTop: 15, fontSize: 14 },
-});
+const createStyles = (theme) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 24,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 24,
+      padding: 28,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 5,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    tagline: {
+      textAlign: 'center',
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      marginBottom: 6,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      textAlign: 'center',
+      color: theme.colors.text,
+      marginBottom: 24,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text,
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 16,
+      backgroundColor: theme.colors.card,
+      marginBottom: 18,
+      color: theme.colors.text,
+    },
+    loader: { marginVertical: 18 },
+    primaryButton: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 14,
+      borderRadius: 16,
+      alignItems: 'center',
+      marginTop: 8,
+      shadowColor: theme.colors.primary,
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
+    },
+    primaryButtonText: {
+      color: theme.colors.buttonText,
+      fontWeight: '700',
+      fontSize: 16,
+    },
+    footerText: {
+      marginTop: 28,
+      textAlign: 'center',
+      color: theme.colors.textSecondary,
+      fontSize: 14,
+    },
+    linkButton: {
+      marginTop: 8,
+      paddingVertical: 6,
+    },
+    link: {
+      color: theme.colors.accent,
+      textAlign: 'center',
+      fontSize: 15,
+      fontWeight: '600',
+    },
+  });
