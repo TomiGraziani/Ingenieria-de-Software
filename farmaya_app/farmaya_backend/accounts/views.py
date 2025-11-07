@@ -56,7 +56,7 @@ class FarmaciaListView(generics.ListAPIView):
 # ============================================================
 # 🔹 PERFIL DEL USUARIO AUTENTICADO
 # ============================================================
-class UserDetailView(generics.RetrieveAPIView):
+class UserDetailView(generics.RetrieveUpdateAPIView):
     """
     Endpoint: /api/usuarios/me/
     Devuelve la información del usuario autenticado
@@ -66,6 +66,14 @@ class UserDetailView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+    def put(self, request, *args, **kwargs):
+        """Permite actualizaciones parciales con método PUT."""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
 
 
 # ============================================================
