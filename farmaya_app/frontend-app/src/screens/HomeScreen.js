@@ -1,4 +1,58 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
+
+import API from '../api/api';
+
+const ORDER_STEPS = [
+  { key: 'creado', label: 'Pedido creado' },
+  { key: 'aceptado', label: 'Pedido aceptado' },
+  { key: 'en_camino', label: 'En camino' },
+  { key: 'recibido', label: 'Recibido' },
+];
+
+const normalizeStatus = (status) => (status === 'aprobado' ? 'aceptado' : status);
+
+export default function HomeScreen({ navigation }) {
+  const [displayName, setDisplayName] = useState('Usuario');
+  const [uploading, setUploading] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [ordersCount, setOrdersCount] = useState(0);
+
+  const loadOrders = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('clienteOrders');
+      if (!stored) {
+        setActiveOrder(null);
+        setOrdersCount(0);
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        setActiveOrder(null);
+        setOrdersCount(0);
+        return;
+      }
+
+      const sorted = parsed
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || b.fecha || 0) - new Date(a.createdAt || a.fecha || 0)
+        );
+
+      setOrdersCount(sorted.length);
+      const running = sorted.find((order) => normalizeStatus(order.estado) !== 'recibido');
+      setActiveOrder(running || null);
+    } catch (error) {
+      console.error('Error cargando pedidos del cliente:', error);
+      setActiveOrder(null);
+      setOrdersCount(0);
+    }
+  }, []);
 
   useEffect(() => {
     const loadUserAndConfigureHeader = async () => {
@@ -22,8 +76,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
             </TouchableOpacity>
           ),
         });
-      } catch (e) {
-        console.error('Error cargando usuario:', e);
+      } catch (error) {
+        console.error('Error cargando usuario:', error);
       }
     };
 
@@ -36,21 +90,63 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
     }, [loadOrders])
   );
 
-  // 🔹 Subir receta al backend
-  const handleUpload = () => {
-    Alert.alert(
-      '¿Cómo subo mi receta?',
-      'Cuando solicites un medicamento que requiera receta podrás adjuntar la foto o el PDF durante el pedido. '
-        + 'Solo elegí el producto desde la farmacia y seguí los pasos del pedido para cargarla allí.'
-    );
+  const handleUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        Alert.alert('Cancelado', 'No seleccionaste ningún archivo.');
+        return;
+      }
+
+      const file = result.assets[0];
+      const token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('imagen', {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType,
+      });
+
+      setUploading(true);
+
+      const response = await API.post('accounts/recetas/', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setUploading(false);
+      Alert.alert('✅ Receta subida', 'Tu receta fue enviada correctamente.');
+      console.log('Respuesta backend:', response.data);
+    } catch (error) {
+      setUploading(false);
+      console.error('Error al subir receta:', error.response?.data || error);
+      Alert.alert('Error', 'No se pudo subir la receta.');
+    }
   };
 
-  const activeStatus = activeOrder?.estado === 'aprobado' ? 'aceptado' : activeOrder?.estado;
+  if (uploading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1E88E5" />
+        <Text>Subiendo receta...</Text>
+      </View>
+    );
+  }
+
+  const activeStatus = normalizeStatus(activeOrder?.estado);
   const currentStepIndex = activeStatus
-    ? Math.max(
-        ORDER_STEPS.findIndex((step) => step.key === activeStatus),
-        0
-      )
+    ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
     : 0;
 
   return (
@@ -118,22 +214,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
           )}
         </View>
 
-        {/* 📤 Botón para subir receta */}
         <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
           <Text style={styles.uploadIcon}>📤</Text>
           <Text style={styles.uploadText}>Cargar receta (foto o PDF)</Text>
         </TouchableOpacity>
 
-        {/* 🔹 Acciones rápidas */}
         <Text style={styles.sectionTitle}>Acciones rápidas</Text>
 
         <View style={styles.grid}>
-          {/* ✅ Buscar farmacias → va al mapa */}
           <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BuscarFarmacia')}>
             <Text style={styles.cardText}>🔍 Buscar farmacia</Text>
           </TouchableOpacity>
 
-          {/* 🛒 Mis pedidos */}
           <TouchableOpacity
             style={styles.card}
             onPress={() => navigation.navigate('MisPedidos')}
@@ -146,7 +238,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
             ) : null}
           </TouchableOpacity>
 
-          {/* ⏰ Recordatorios (opcional, por ahora deshabilitado) */}
           <TouchableOpacity
             style={[styles.card, styles.cardDisabled]}
             onPress={() => Alert.alert('Próximamente', 'Esta función aún no está disponible.')}
@@ -156,7 +247,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
         </View>
       </View>
 
-      {/* 🔹 Barra inferior */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={() => navigation.navigate('Home')}>
           <Text style={styles.footerText}>Inicio</Text>
