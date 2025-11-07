@@ -1,46 +1,85 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function HomeRepartidorScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
 
-  useEffect(() => {
-    const loadPedidos = async () => {
-      const stored = await AsyncStorage.getItem("pedidosRepartidor");
+  const loadPedidos = useCallback(async () => {
+    const stored = await AsyncStorage.getItem("pedidosRepartidor");
 
-      if (stored) {
-        setPedidos(JSON.parse(stored));
-      } else {
-        // ✅ Pedidos simulados LISTOS para repartidor
-        const mockPedidos = [
-          {
-            id: "1",
-            farmacia: "Farmacia Central",
-            direccionFarmacia: "Av. Siempre Viva 742",
-            direccionCliente: "Calle 50 #800",
-            distancia: 2.4,
-            productos: "Ibuprofeno + Amoxicilina",
-            estado: "confirmado", // 👈 IMPORTANTE
-          },
-          {
-            id: "2",
-            farmacia: "Farmacity",
-            direccionFarmacia: "Calle 12 #1200",
-            direccionCliente: "Av. 7 #1420",
-            distancia: 4.7,
-            productos: "Paracetamol 500mg",
-            estado: "confirmado", // 👈 IMPORTANTE
-          }
-        ];
+    if (stored) {
+      setPedidos(JSON.parse(stored));
+    } else {
+      // ✅ Pedidos simulados LISTOS para repartidor
+      const mockPedidos = [
+        {
+          id: "1",
+          farmacia: "Farmacia Central",
+          direccionFarmacia: "Av. Siempre Viva 742",
+          direccionCliente: "Calle 50 #800",
+          distancia: 2.4,
+          productos: "Ibuprofeno + Amoxicilina",
+          estado: "confirmado", // 👈 IMPORTANTE
+        },
+        {
+          id: "2",
+          farmacia: "Farmacity",
+          direccionFarmacia: "Calle 12 #1200",
+          direccionCliente: "Av. 7 #1420",
+          distancia: 4.7,
+          productos: "Paracetamol 500mg",
+          estado: "confirmado", // 👈 IMPORTANTE
+        }
+      ];
 
-        setPedidos(mockPedidos);
-        await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(mockPedidos));
-      }
-    };
-
-    loadPedidos();
+      setPedidos(mockPedidos);
+      await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(mockPedidos));
+    }
   }, []);
+
+  useEffect(() => {
+    loadPedidos();
+  }, [loadPedidos]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPedidos();
+    }, [loadPedidos])
+  );
+
+  const updateClienteOrderStatus = async (id, estado) => {
+    try {
+      const stored = await AsyncStorage.getItem("clienteOrders");
+      if (!stored) return;
+      const orders = JSON.parse(stored);
+      const updated = orders.map((order) =>
+        order.id?.toString() === id.toString()
+          ? { ...order, estado }
+          : order
+      );
+      await AsyncStorage.setItem("clienteOrders", JSON.stringify(updated));
+    } catch (error) {
+      console.error("Error actualizando estado del pedido del cliente:", error);
+    }
+  };
+
+  const updateFarmaciaOrderStatus = async (id, estado) => {
+    try {
+      const stored = await AsyncStorage.getItem("farmaciaOrders");
+      if (!stored) return;
+      const orders = JSON.parse(stored);
+      const updated = orders.map((order) =>
+        order.id?.toString() === id.toString()
+          ? { ...order, estado }
+          : order
+      );
+      await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(updated));
+    } catch (error) {
+      console.error("Error actualizando estado del pedido en farmacia:", error);
+    }
+  };
 
   // ✅ Solo mostrar pedidos confirmados
   const pedidosDisponibles = pedidos.filter(p => p.estado === "confirmado");
@@ -53,29 +92,22 @@ export default function HomeRepartidorScreen({ navigation }) {
   }
 
   const aceptarPedido = async (id) => {
-  const repartidor = { nombre: "Repartidor Test" }; // luego vendrá del login
-  
-  const updated = pedidos.map(p =>
-    p.id === id 
-      ? { ...p, estado: "asignado", repartidor } // ✅ agregar repartidor
-      : p
-  );
+    const repartidor = { nombre: "Repartidor Test" }; // luego vendrá del login
 
-  setPedidos(updated);
-  await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-
-  // ✅ también actualizar almacenamiento de farmacia
-  const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
-  if (storedFarmacia) {
-    const orders = JSON.parse(storedFarmacia).map(o =>
-      o.id === id ? { ...o, estado: "asignado", repartidor } : o
+    const updated = pedidos.map(p =>
+      p.id === id
+        ? { ...p, estado: "asignado", repartidor }
+        : p
     );
-    await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(orders));
-  }
 
-  const pedido = updated.find(p => p.id === id);
-  navigation.replace("PedidoActivo", { pedido });
-};
+    setPedidos(updated);
+    await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+    await updateClienteOrderStatus(id, "en_camino");
+    await updateFarmaciaOrderStatus(id, "en_camino");
+
+    const pedido = updated.find(p => p.id === id);
+    navigation.replace("PedidoActivo", { pedido });
+  };
 
   const rechazarPedido = async (id) => {
     const updated = pedidos.filter(p => p.id !== id);
@@ -108,11 +140,20 @@ export default function HomeRepartidorScreen({ navigation }) {
     <View style={styles.container}>
       <Text style={styles.header}>🚚 Pedidos Disponibles</Text>
 
-      <FlatList
-        data={pedidosDisponibles.sort((a, b) => a.distancia - b.distancia)}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-      />
+      {pedidosDisponibles.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No hay pedidos pendientes por ahora</Text>
+          <Text style={styles.emptySubtitle}>
+            Cuando una farmacia confirme un pedido lo vas a ver en esta lista.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={pedidosDisponibles.sort((a, b) => a.distancia - b.distancia)}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+        />
+      )}
     </View>
   );
 }
@@ -125,5 +166,13 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: "row", marginTop: 10, gap: 10 },
   accept: { flex: 1, backgroundColor: "#2E7D32", padding: 10, borderRadius: 6 },
   reject: { flex: 1, backgroundColor: "#C62828", padding: 10, borderRadius: 6 },
-  btnText: { color: "#fff", textAlign: "center", fontWeight: "600" }
+  btnText: { color: "#fff", textAlign: "center", fontWeight: "600" },
+  emptyState: {
+    marginTop: 32,
+    padding: 24,
+    borderRadius: 12,
+    backgroundColor: "#F5F5F5",
+  },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#1E88E5", textAlign: "center" },
+  emptySubtitle: { fontSize: 14, color: "#546E7A", textAlign: "center", marginTop: 8 },
 });

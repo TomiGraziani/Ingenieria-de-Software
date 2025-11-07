@@ -6,37 +6,63 @@ export default function PedidoActivoScreen({ route, navigation }) {
   const { pedido } = route.params;
   const [retirado, setRetirado] = useState(pedido.estado === "en camino");
 
+  const updateClienteOrderStatus = async (estado) => {
+    try {
+      const stored = await AsyncStorage.getItem("clienteOrders");
+      if (!stored) return;
+      const orders = JSON.parse(stored);
+      const updated = orders.map((order) =>
+        order.id?.toString() === pedido.id?.toString()
+          ? { ...order, estado }
+          : order
+      );
+      await AsyncStorage.setItem("clienteOrders", JSON.stringify(updated));
+    } catch (error) {
+      console.error("Error actualizando pedido del cliente:", error);
+    }
+  };
+
+  const updateFarmaciaOrderStatus = async (estado) => {
+    try {
+      const stored = await AsyncStorage.getItem("farmaciaOrders");
+      if (!stored) return;
+      const orders = JSON.parse(stored);
+      const updated = orders.map((order) =>
+        order.id?.toString() === pedido.id?.toString()
+          ? { ...order, estado }
+          : order
+      );
+      await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(updated));
+    } catch (error) {
+      console.error("Error actualizando pedido en farmacia:", error);
+    }
+  };
+
   const marcarRetirado = async () => {
-  const stored = await AsyncStorage.getItem("pedidosRepartidor");
-  const updated = JSON.parse(stored).map(p =>
-    p.id === pedido.id ? { ...p, estado: "retirado" } : p
-  );
+    const stored = await AsyncStorage.getItem("pedidosRepartidor");
+    const updated = JSON.parse(stored).map((p) =>
+      p.id === pedido.id ? { ...p, estado: "retirado" } : p
+    );
 
-  setRetirado(true);
-  await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+    setRetirado(true);
+    await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+    await updateClienteOrderStatus("en_camino");
+    await updateFarmaciaOrderStatus("en_camino");
 
-  // ✅ actualizar también farmacia
-  const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
-  if (storedFarmacia) {
-    const orders = JSON.parse(storedFarmacia)
-      .filter(o => o.id !== pedido.id); // 🔥 eliminar de vista farmacia
-
-    await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(orders));
-  }
-
-  Alert.alert("📦 Pedido retirado de farmacia", "Procede a entregar.");
-};
-
+    Alert.alert("📦 Pedido retirado de farmacia", "Procede a entregar.");
+  };
 
   const marcarEntregado = async () => {
-  const stored = await AsyncStorage.getItem("pedidosRepartidor");
-  const updated = JSON.parse(stored).map(p =>
-    p.id === pedido.id ? { ...p, estado: "entregado" } : p
-  );
+    const stored = await AsyncStorage.getItem("pedidosRepartidor");
+    const updated = JSON.parse(stored).map((p) =>
+      p.id === pedido.id ? { ...p, estado: "entregado" } : p
+    );
 
-  await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-  navigation.replace("HomeRepartidor");
-};
+    await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+    await updateClienteOrderStatus("recibido");
+    await updateFarmaciaOrderStatus("entregado");
+    navigation.replace("HomeRepartidor");
+  };
 
   return (
     <View style={styles.container}>
