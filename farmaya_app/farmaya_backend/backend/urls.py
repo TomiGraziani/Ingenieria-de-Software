@@ -7,9 +7,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # 🔹 Endpoints principales (rutas limpias)
-    path('api/', include('accounts.urls')),      # ✅ usuarios: login, registro, perfil
-    path('api/productos/', include('productos.urls')),
-    path('api/pedidos/', include('pedidos.urls')),
+    path('api/', include('accounts.urls')),      # ✅ usuarios: login, registro, perfil y CRUDs principales
 ]
 
 if settings.DEBUG:
