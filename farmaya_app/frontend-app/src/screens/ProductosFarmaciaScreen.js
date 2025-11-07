@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
@@ -17,6 +19,10 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [procesandoPedido, setProcesandoPedido] = useState(false);
+  const [direccionModalVisible, setDireccionModalVisible] = useState(false);
+  const [direccionEntrega, setDireccionEntrega] = useState("");
+  const [direccionError, setDireccionError] = useState("");
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
 
   // 🔹 Obtener productos de esa farmacia
   useEffect(() => {
@@ -73,13 +79,20 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     });
 
   // 🔹 Crear pedido en el backend
-  const realizarPedido = async (producto) => {
+  const realizarPedido = async (producto, direccionSeleccionada) => {
     try {
       if (procesandoPedido) {
         return;
       }
 
       setProcesandoPedido(true);
+
+      const direccionNormalizada = direccionSeleccionada?.trim();
+      if (!direccionNormalizada) {
+        Alert.alert("Dirección requerida", "Ingresá una dirección de entrega válida.");
+        setProcesandoPedido(false);
+        return;
+      }
 
       let recetaAdjunta = null;
       if (producto.requiere_receta) {
@@ -100,7 +113,7 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
       const formData = new FormData();
       formData.append("producto", String(producto.id));
       formData.append("cantidad", "1");
-      formData.append("direccion_entrega", "Entrega a domicilio");
+      formData.append("direccion_entrega", direccionNormalizada);
       formData.append("metodo_pago", "efectivo");
 
       if (recetaAdjunta) {
@@ -124,9 +137,15 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
       );
       console.log("📦 Pedido creado:", response.data);
 
-      const pedidoId = response.data?.id?.toString?.() ?? Date.now().toString();
+      const payload = response.data || {};
+      const pedidoId = payload.id?.toString?.() ?? Date.now().toString();
       const requiereReceta = !!producto.requiere_receta;
       const createdAt = new Date().toISOString();
+      const cantidad = Number(payload.cantidad ?? 1);
+      const direccion = payload.direccion_entrega || direccionNormalizada;
+      const estadoBackend = payload.estado || (requiereReceta ? "pendiente" : "aceptado");
+      const clienteNombre = payload.usuario_nombre || payload.usuario?.nombre || "Cliente";
+      const clienteEmail = payload.usuario_email || payload.usuario?.email || null;
 
       const nuevoPedidoCliente = {
         id: pedidoId,
@@ -135,10 +154,10 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
         farmaciaId: farmacia.id,
         farmaciaNombre: farmacia.nombre,
         farmaciaDireccion: farmacia.direccion || "Dirección no disponible",
-        cantidad: payload.cantidad,
-        direccionEntrega: payload.direccion_entrega,
+        cantidad,
+        direccionEntrega: direccion,
         requiereReceta,
-        estado: requiereReceta ? "creado" : "aceptado",
+        estado: requiereReceta && estadoBackend === "pendiente" ? "creado" : estadoBackend,
         createdAt,
       };
 
@@ -151,10 +170,10 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
 
       const pedidoFarmacia = {
         ...nuevoPedidoCliente,
-        estado: requiereReceta ? "pendiente" : "aceptado",
-        usuario_email: usuario?.email,
-        clienteNombre: usuario?.nombre,
-        recetaPendiente: requiereReceta,
+        estado: estadoBackend,
+        usuario_email: clienteEmail,
+        clienteNombre,
+        direccion_entrega: direccion,
       };
       const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
       const pedidosFarmacia = storedFarmacia ? JSON.parse(storedFarmacia) : [];
@@ -170,7 +189,7 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
           id: pedidoId,
           farmacia: farmacia.nombre,
           direccionFarmacia: farmacia.direccion || "Dirección de farmacia",
-          direccionCliente: payload.direccion_entrega,
+          direccionCliente: direccion,
           productos: producto.nombre,
           requiereReceta,
           estado: "confirmado",
@@ -182,6 +201,9 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
           JSON.stringify([...pedidosRepartidor, nuevoPedidoRepartidor])
         );
       }
+      setDireccionEntrega("");
+      setProductoSeleccionado(null);
+      setDireccionError("");
     } catch (error) {
       console.error("❌ Error al crear pedido:", error.response?.data || error);
       Alert.alert(
@@ -191,6 +213,32 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     } finally {
       setProcesandoPedido(false);
     }
+  };
+
+  const abrirModalDireccion = (producto) => {
+    setProductoSeleccionado(producto);
+    setDireccionError("");
+    setDireccionModalVisible(true);
+  };
+
+  const cerrarModalDireccion = () => {
+    setDireccionModalVisible(false);
+    setProductoSeleccionado(null);
+  };
+
+  const confirmarDireccion = () => {
+    const direccionNormalizada = direccionEntrega.trim();
+    if (!direccionNormalizada) {
+      setDireccionError("Ingresá la dirección de entrega.");
+      return;
+    }
+
+    if (!productoSeleccionado) {
+      return;
+    }
+
+    setDireccionModalVisible(false);
+    realizarPedido(productoSeleccionado, direccionNormalizada);
   };
 
   // 🔹 Loader
@@ -216,41 +264,96 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
 
   // 🔹 Lista de productos
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🛍 Productos de {farmacia.nombre}</Text>
-      <FlatList
-        data={productos}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() =>
-              Alert.alert(
-                "Confirmar pedido",
-                `¿Querés pedir "${item.nombre}" a ${farmacia.nombre}?`,
-                [
-                  { text: "Cancelar", style: "cancel" },
-                  { text: "Confirmar", onPress: () => realizarPedido(item) },
-                ]
-              )
-            }
-          >
-            <Text style={styles.nombre}>{item.nombre}</Text>
-            {item.presentacion ? (
-              <Text style={styles.presentacion}>💊 {item.presentacion}</Text>
+    <>
+      <View style={styles.container}>
+        <Text style={styles.title}>🛍 Productos de {farmacia.nombre}</Text>
+        <FlatList
+          data={productos}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() =>
+                Alert.alert(
+                  "Confirmar pedido",
+                  `¿Querés pedir "${item.nombre}" a ${farmacia.nombre}?`,
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                      text: "Continuar",
+                      onPress: () => abrirModalDireccion(item),
+                    },
+                  ]
+                )
+              }
+            >
+              <Text style={styles.nombre}>{item.nombre}</Text>
+              {item.presentacion ? (
+                <Text style={styles.presentacion}>💊 {item.presentacion}</Text>
+              ) : null}
+              {item.descripcion ? (
+                <Text style={styles.descripcion}>{item.descripcion}</Text>
+              ) : null}
+              <Text style={styles.precio}>💰 ${item.precio}</Text>
+              <Text style={styles.stock}>📦 Stock disponible: {item.stock}</Text>
+              {item.requiere_receta && (
+                <Text style={styles.receta}>📜 Requiere receta</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      <Modal
+        visible={direccionModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarModalDireccion}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Dirección de entrega</Text>
+            <Text style={styles.modalSubtitle}>
+              Ingresá la dirección donde querés recibir tu pedido.
+            </Text>
+            <TextInput
+              style={[styles.input, direccionError ? styles.inputError : null]}
+              value={direccionEntrega}
+              onChangeText={(value) => {
+                setDireccionEntrega(value);
+                if (direccionError) {
+                  setDireccionError("");
+                }
+              }}
+              placeholder="Ej: Calle 12 #1234, Piso 3"
+              autoCapitalize="sentences"
+              autoCorrect
+            />
+            {direccionError ? (
+              <Text style={styles.errorText}>{direccionError}</Text>
             ) : null}
-            {item.descripcion ? (
-              <Text style={styles.descripcion}>{item.descripcion}</Text>
-            ) : null}
-            <Text style={styles.precio}>💰 ${item.precio}</Text>
-            <Text style={styles.stock}>📦 Stock disponible: {item.stock}</Text>
-            {item.requiere_receta && (
-              <Text style={styles.receta}>📜 Requiere receta</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      />
-    </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={cerrarModalDireccion}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={confirmarDireccion}
+                disabled={procesandoPedido}
+              >
+                <Text style={styles.modalButtonText}>
+                  {procesandoPedido ? "Creando..." : "Confirmar pedido"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -274,4 +377,66 @@ const styles = StyleSheet.create({
   receta: { fontSize: 12, color: "red" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 16 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1E88E5",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#546E7A",
+    marginBottom: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#cfd8dc",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: "#263238",
+  },
+  inputError: {
+    borderColor: "#e53935",
+  },
+  errorText: {
+    color: "#e53935",
+    fontSize: 13,
+    marginTop: 6,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 20,
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  modalButtonPrimary: {
+    backgroundColor: "#1E88E5",
+  },
+  modalButtonSecondary: {
+    backgroundColor: "#90A4AE",
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });

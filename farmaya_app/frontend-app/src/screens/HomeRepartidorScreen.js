@@ -85,9 +85,17 @@ export default function HomeRepartidorScreen({ navigation }) {
   const pedidosDisponibles = pedidos.filter(p => p.estado === "confirmado");
 
   // ✅ Si tiene un pedido tomado, ir a pantalla activa
-  const pedidoActivo = pedidos.find(p => p.estado === "asignado" || p.estado === "retirado");
+  const pedidoActivo = pedidos.find(
+    (p) => p.estado === "asignado" || p.estado === "retirado"
+  );
+
+  useEffect(() => {
+    if (pedidoActivo) {
+      navigation.replace("PedidoActivo", { pedido: pedidoActivo });
+    }
+  }, [pedidoActivo, navigation]);
+
   if (pedidoActivo) {
-    navigation.replace("PedidoActivo", { pedido: pedidoActivo });
     return null;
   }
 
