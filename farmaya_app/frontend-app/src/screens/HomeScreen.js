@@ -1,55 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import * as DocumentPicker from 'expo-document-picker';
-import API from '../api/api';
-
-export default function HomeScreen({ navigation }) {
-  const [displayName, setDisplayName] = useState('Usuario');
-  const [uploading, setUploading] = useState(false);
-  const [activeOrder, setActiveOrder] = useState(null);
-  const [ordersCount, setOrdersCount] = useState(0);
-
-  const ORDER_STEPS = [
-    { key: 'creado', label: 'Pedido creado' },
-    { key: 'aceptado', label: 'Pedido aceptado' },
-    { key: 'en_camino', label: 'En camino' },
-    { key: 'recibido', label: 'Recibido' },
-  ];
-
-  const loadOrders = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem('clienteOrders');
-      if (!stored) {
-        setActiveOrder(null);
-        setOrdersCount(0);
-        return;
-      }
-
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) {
-        setActiveOrder(null);
-        setOrdersCount(0);
-        return;
-      }
-
-      const sorted = parsed
-        .slice()
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt || b.fecha || 0) - new Date(a.createdAt || a.fecha || 0)
-        );
-
-      setOrdersCount(sorted.length);
-      const running = sorted.find((order) => order.estado !== 'recibido');
-      setActiveOrder(running || null);
-    } catch (error) {
-      console.error('Error cargando pedidos del cliente:', error);
-      setActiveOrder(null);
-      setOrdersCount(0);
-    }
-  }, []);
 
   useEffect(() => {
     const loadUserAndConfigureHeader = async () => {
@@ -88,60 +37,13 @@ export default function HomeScreen({ navigation }) {
   );
 
   // 🔹 Subir receta al backend
-  const handleUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        Alert.alert('Cancelado', 'No seleccionaste ningún archivo.');
-        return;
-      }
-
-      const file = result.assets[0];
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente.');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('imagen', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType,
-      });
-
-      setUploading(true);
-
-      // ✅ Subida real al backend
-      const response = await API.post('accounts/recetas/', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      setUploading(false);
-      Alert.alert('✅ Receta subida', 'Tu receta fue enviada correctamente.');
-      console.log('Respuesta backend:', response.data);
-    } catch (error) {
-      setUploading(false);
-      console.error('Error al subir receta:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudo subir la receta.');
-    }
-  };
-
-  if (uploading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E88E5" />
-        <Text>Subiendo receta...</Text>
-      </View>
+  const handleUpload = () => {
+    Alert.alert(
+      '¿Cómo subo mi receta?',
+      'Cuando solicites un medicamento que requiera receta podrás adjuntar la foto o el PDF durante el pedido. '
+        + 'Solo elegí el producto desde la farmacia y seguí los pasos del pedido para cargarla allí.'
     );
-  }
+  };
 
   const activeStatus = activeOrder?.estado === 'aprobado' ? 'aceptado' : activeOrder?.estado;
   const currentStepIndex = activeStatus

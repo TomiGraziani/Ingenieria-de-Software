@@ -48,9 +48,9 @@ admin.site.register(User, UserAdmin)
 # -----------------------------
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'presentacion', 'precio', 'necesita_receta', 'farmacia')
+    list_display = ('nombre', 'presentacion', 'precio', 'stock', 'requiere_receta', 'farmacia')
     search_fields = ('nombre', 'farmacia__nombre')
-    list_filter = ('necesita_receta', 'farmacia')
+    list_filter = ('requiere_receta', 'farmacia')
 
 
 # -----------------------------

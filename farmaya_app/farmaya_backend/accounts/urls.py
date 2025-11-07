@@ -1,16 +1,26 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterUserView,
     UserDetailView,
     FarmaciaListView,
+    CustomTokenObtainPairView,
+    ProductoViewSet,
+    PedidoViewSet,
+    RecetaViewSet,
 )
+
+router = DefaultRouter()
+router.register(r'productos', ProductoViewSet, basename='producto')
+router.register(r'pedidos', PedidoViewSet, basename='pedido')
+router.register(r'recetas', RecetaViewSet, basename='receta')
 
 urlpatterns = [
     # ============================================================
     # 🔹 AUTENTICACIÓN (JWT)
     # ============================================================
-    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # ============================================================
@@ -23,4 +33,4 @@ urlpatterns = [
     # 🔹 FARMACIAS
     # ============================================================
     path('usuarios/farmacias/', FarmaciaListView.as_view(), name='farmacias_list'),
-]
+] + router.urls
