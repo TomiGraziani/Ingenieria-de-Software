@@ -1,12 +1,55 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import API from '../api/api';
 
 export default function HomeScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('Usuario');
   const [uploading, setUploading] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [ordersCount, setOrdersCount] = useState(0);
+
+  const ORDER_STEPS = [
+    { key: 'creado', label: 'Pedido creado' },
+    { key: 'aceptado', label: 'Pedido aceptado' },
+    { key: 'en_camino', label: 'En camino' },
+    { key: 'recibido', label: 'Recibido' },
+  ];
+
+  const loadOrders = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('clienteOrders');
+      if (!stored) {
+        setActiveOrder(null);
+        setOrdersCount(0);
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        setActiveOrder(null);
+        setOrdersCount(0);
+        return;
+      }
+
+      const sorted = parsed
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || b.fecha || 0) - new Date(a.createdAt || a.fecha || 0)
+        );
+
+      setOrdersCount(sorted.length);
+      const running = sorted.find((order) => order.estado !== 'recibido');
+      setActiveOrder(running || null);
+    } catch (error) {
+      console.error('Error cargando pedidos del cliente:', error);
+      setActiveOrder(null);
+      setOrdersCount(0);
+    }
+  }, []);
 
   useEffect(() => {
     const loadUserAndConfigureHeader = async () => {
@@ -37,6 +80,12 @@ export default function HomeScreen({ navigation }) {
 
     loadUserAndConfigureHeader();
   }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders();
+    }, [loadOrders])
+  );
 
   // 🔹 Subir receta al backend
   const handleUpload = async () => {
@@ -94,9 +143,79 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
+  const activeStatus = activeOrder?.estado === 'aprobado' ? 'aceptado' : activeOrder?.estado;
+  const currentStepIndex = activeStatus
+    ? Math.max(
+        ORDER_STEPS.findIndex((step) => step.key === activeStatus),
+        0
+      )
+    : 0;
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
+        <View style={styles.progressCard}>
+          <Text style={styles.progressTitle}>Seguimiento de tu pedido</Text>
+          {activeOrder ? (
+            <>
+              <Text style={styles.progressSubtitle}>
+                {activeOrder.productoNombre || activeOrder.producto_nombre || 'Pedido'} ·{' '}
+                {activeOrder.farmaciaNombre || activeOrder.farmacia || 'Farmacia'}
+              </Text>
+              <View style={styles.stepsWrapper}>
+                {ORDER_STEPS.map((step, index) => {
+                  const isCompleted = index < currentStepIndex;
+                  const isCurrent = index === currentStepIndex;
+                  return (
+                    <View key={step.key} style={styles.stepItem}>
+                      <View style={styles.stepRow}>
+                        <View
+                          style={[
+                            styles.stepCircle,
+                            isCompleted && styles.stepCircleCompleted,
+                            isCurrent && styles.stepCircleCurrent,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepCircleText,
+                              (isCompleted || isCurrent) && styles.stepCircleTextActive,
+                            ]}
+                          >
+                            {isCompleted ? '✓' : index + 1}
+                          </Text>
+                        </View>
+                        {index < ORDER_STEPS.length - 1 && (
+                          <View
+                            style={[
+                              styles.stepConnector,
+                              index < currentStepIndex
+                                ? styles.stepConnectorActive
+                                : styles.stepConnectorInactive,
+                            ]}
+                          />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.stepLabel,
+                          (isCompleted || isCurrent) && styles.stepLabelActive,
+                        ]}
+                      >
+                        {step.label}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <Text style={styles.progressPlaceholder}>
+              Cuando confirmes una compra vas a poder seguirla desde aquí.
+            </Text>
+          )}
+        </View>
+
         {/* 📤 Botón para subir receta */}
         <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
           <Text style={styles.uploadIcon}>📤</Text>
@@ -112,12 +231,17 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.cardText}>🔍 Buscar farmacia</Text>
           </TouchableOpacity>
 
-          {/* 🛒 Mis pedidos (opcional, por ahora deshabilitado) */}
+          {/* 🛒 Mis pedidos */}
           <TouchableOpacity
-            style={[styles.card, styles.cardDisabled]}
-            onPress={() => Alert.alert('Próximamente', 'Esta función aún no está disponible.')}
+            style={styles.card}
+            onPress={() => navigation.navigate('MisPedidos')}
           >
             <Text style={styles.cardText}>🛒 Mis pedidos</Text>
+            {ordersCount > 0 ? (
+              <Text style={styles.cardBadge}>
+                {ordersCount} {ordersCount === 1 ? 'pedido' : 'pedidos'}
+              </Text>
+            ) : null}
           </TouchableOpacity>
 
           {/* ⏰ Recordatorios (opcional, por ahora deshabilitado) */}
@@ -142,7 +266,7 @@ export default function HomeScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.footerButton}
-          onPress={() => Alert.alert('Próximamente', 'Esta función aún no está disponible.')}
+          onPress={() => navigation.navigate('MisPedidos')}
         >
           <Text style={styles.footerText}>Pedidos</Text>
         </TouchableOpacity>
@@ -161,6 +285,66 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   content: { flex: 1, padding: 20 },
+  progressCard: {
+    backgroundColor: '#eef4ff',
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 24,
+  },
+  progressTitle: { fontSize: 16, fontWeight: '700', color: '#1E40AF' },
+  progressSubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  progressPlaceholder: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  stepsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 18,
+  },
+  stepItem: { flex: 1, alignItems: 'center' },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  stepCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleCompleted: { borderColor: '#2563EB', backgroundColor: '#2563EB' },
+  stepCircleCurrent: { borderColor: '#2563EB' },
+  stepCircleText: { fontWeight: '700', color: '#4B5563' },
+  stepCircleTextActive: { color: '#fff' },
+  stepConnector: {
+    flex: 1,
+    height: 2,
+    marginHorizontal: 4,
+    borderRadius: 999,
+  },
+  stepConnectorActive: { backgroundColor: '#2563EB' },
+  stepConnectorInactive: { backgroundColor: '#CBD5F5' },
+  stepLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  stepLabelActive: { color: '#1F2937', fontWeight: '600' },
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#111' },
   headerProfileButton: { marginRight: 8, padding: 6 },
   profileIcon: { fontSize: 20 },
@@ -190,6 +374,12 @@ const styles = StyleSheet.create({
   },
   cardDisabled: { opacity: 0.5 },
   cardText: { fontSize: 14, textAlign: 'center', color: '#333' },
+  cardBadge: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#1E40AF',
+    fontWeight: '600',
+  },
   footer: {
     height: 60,
     flexDirection: 'row',

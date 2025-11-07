@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator, 
-  Alert 
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
@@ -42,6 +42,9 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
         return;
       }
 
+      const storedUser = await AsyncStorage.getItem("user");
+      const usuario = storedUser ? JSON.parse(storedUser) : null;
+
       const payload = {
         producto_id: producto.id,
         cantidad: 1,
@@ -59,6 +62,65 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
         `Tu pedido de "${producto.nombre}" fue enviado a ${farmacia.nombre}.`
       );
       console.log("📦 Pedido creado:", response.data);
+
+      const pedidoId = response.data?.id?.toString?.() ?? Date.now().toString();
+      const requiereReceta = !!producto.requiere_receta;
+      const createdAt = new Date().toISOString();
+
+      const nuevoPedidoCliente = {
+        id: pedidoId,
+        productoId: producto.id,
+        productoNombre: producto.nombre,
+        farmaciaId: farmacia.id,
+        farmaciaNombre: farmacia.nombre,
+        farmaciaDireccion: farmacia.direccion || "Dirección no disponible",
+        cantidad: payload.cantidad,
+        direccionEntrega: payload.direccion_entrega,
+        requiereReceta,
+        estado: requiereReceta ? "creado" : "aceptado",
+        createdAt,
+      };
+
+      const storedCliente = await AsyncStorage.getItem("clienteOrders");
+      const pedidosCliente = storedCliente ? JSON.parse(storedCliente) : [];
+      await AsyncStorage.setItem(
+        "clienteOrders",
+        JSON.stringify([...pedidosCliente, nuevoPedidoCliente])
+      );
+
+      const pedidoFarmacia = {
+        ...nuevoPedidoCliente,
+        estado: requiereReceta ? "pendiente" : "aceptado",
+        usuario_email: usuario?.email,
+        clienteNombre: usuario?.nombre,
+        recetaPendiente: requiereReceta,
+      };
+      const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
+      const pedidosFarmacia = storedFarmacia ? JSON.parse(storedFarmacia) : [];
+      await AsyncStorage.setItem(
+        "farmaciaOrders",
+        JSON.stringify([...pedidosFarmacia, pedidoFarmacia])
+      );
+
+      if (!requiereReceta) {
+        const storedRepartidor = await AsyncStorage.getItem("pedidosRepartidor");
+        const pedidosRepartidor = storedRepartidor ? JSON.parse(storedRepartidor) : [];
+        const nuevoPedidoRepartidor = {
+          id: pedidoId,
+          farmacia: farmacia.nombre,
+          direccionFarmacia: farmacia.direccion || "Dirección de farmacia",
+          direccionCliente: payload.direccion_entrega,
+          productos: producto.nombre,
+          requiereReceta,
+          estado: "confirmado",
+          distancia: 2.5,
+          createdAt,
+        };
+        await AsyncStorage.setItem(
+          "pedidosRepartidor",
+          JSON.stringify([...pedidosRepartidor, nuevoPedidoRepartidor])
+        );
+      }
     } catch (error) {
       console.error("❌ Error al crear pedido:", error.response?.data || error);
       Alert.alert(
