@@ -13,6 +13,7 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 
 export default function HomeFarmaciaScreen({ navigation }) {
@@ -61,6 +62,130 @@ export default function HomeFarmaciaScreen({ navigation }) {
       setPedidos(response.data);
     } catch (error) {
       console.error("❌ Error al cargar pedidos:", error.response?.data || error);
+    }
+  };
+
+  const sincronizarAlmacenamientos = async (pedido) => {
+    try {
+      const rawId = pedido?.id ?? pedido?.ID ?? null;
+      const id = rawId != null ? rawId.toString() : null;
+      if (!id) return;
+
+      const direccionEntrega =
+        pedido.direccion_entrega || pedido.direccionEntrega || "Entrega a coordinar";
+      const productoNombre =
+        pedido.producto_nombre ||
+        pedido.productoNombre ||
+        pedido.producto?.nombre ||
+        "Producto";
+      const requiereReceta =
+        pedido.requiere_receta ?? pedido.requiereReceta ?? pedido.producto?.requiere_receta ?? false;
+      const clienteNombre = pedido.usuario_nombre || pedido.clienteNombre || "";
+      const clienteEmail =
+        pedido.usuario_email || pedido.usuario?.email || pedido.email || "";
+      const fechaPedido = pedido.fecha || pedido.createdAt || new Date().toISOString();
+      const farmaciaNombre = farmacia?.nombre || pedido.farmacia_nombre || "Farmacia";
+      const farmaciaDireccion = farmacia?.direccion || pedido.farmaciaDireccion || "Dirección no disponible";
+
+      // Actualizar pedidos de la farmacia
+      const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
+      const pedidosFarmacia = storedFarmacia ? JSON.parse(storedFarmacia) : [];
+      const indexFarmacia = pedidosFarmacia.findIndex((item) => item.id?.toString() === id);
+      const pedidoFarmacia = {
+        id,
+        productoNombre,
+        producto_nombre: productoNombre,
+        cantidad: pedido.cantidad ?? 1,
+        direccionEntrega,
+        direccion_entrega: direccionEntrega,
+        requiereReceta,
+        estado: pedido.estado,
+        farmaciaNombre,
+        farmaciaDireccion,
+        usuario_email: clienteEmail,
+        clienteNombre,
+        createdAt: fechaPedido,
+      };
+
+      if (indexFarmacia === -1) {
+        pedidosFarmacia.push(pedidoFarmacia);
+      } else {
+        pedidosFarmacia[indexFarmacia] = {
+          ...pedidosFarmacia[indexFarmacia],
+          ...pedidoFarmacia,
+        };
+      }
+
+      await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(pedidosFarmacia));
+
+      // Actualizar pedidos del cliente
+      const storedCliente = await AsyncStorage.getItem("clienteOrders");
+      if (storedCliente) {
+        const pedidosCliente = JSON.parse(storedCliente);
+        const actualizados = pedidosCliente.map((item) => {
+          if (item.id?.toString() !== id) return item;
+
+          let estadoCliente = item.estado;
+          if (["aprobado", "aceptado"].includes(pedido.estado)) {
+            estadoCliente = "aceptado";
+          } else if (["enviado", "en_camino"].includes(pedido.estado)) {
+            estadoCliente = "en_camino";
+          } else if (pedido.estado === "entregado") {
+            estadoCliente = "recibido";
+          } else if (pedido.estado === "cancelado") {
+            estadoCliente = "cancelado";
+          } else if (pedido.estado === "pendiente" && requiereReceta) {
+            estadoCliente = "creado";
+          } else if (pedido.estado) {
+            estadoCliente = pedido.estado;
+          }
+
+          return {
+            ...item,
+            estado: estadoCliente,
+            direccionEntrega,
+            productoNombre,
+            producto_nombre: productoNombre,
+          };
+        });
+
+        await AsyncStorage.setItem("clienteOrders", JSON.stringify(actualizados));
+      }
+
+      // Actualizar pedidos del repartidor
+      const storedRepartidor = await AsyncStorage.getItem("pedidosRepartidor");
+      const pedidosRepartidor = storedRepartidor ? JSON.parse(storedRepartidor) : [];
+      const indexRepartidor = pedidosRepartidor.findIndex((item) => item.id?.toString() === id);
+
+      if (["aprobado", "aceptado"].includes(pedido.estado)) {
+        const pedidoRepartidor = {
+          id,
+          farmacia: farmaciaNombre,
+          direccionFarmacia:
+            farmaciaDireccion || pedidosRepartidor[indexRepartidor]?.direccionFarmacia || "Dirección de farmacia",
+          direccionCliente: direccionEntrega,
+          productos: productoNombre,
+          requiereReceta,
+          estado: "confirmado",
+          distancia: pedidosRepartidor[indexRepartidor]?.distancia || 3.2,
+          createdAt: fechaPedido,
+        };
+
+        if (indexRepartidor === -1) {
+          pedidosRepartidor.push(pedidoRepartidor);
+        } else {
+          pedidosRepartidor[indexRepartidor] = {
+            ...pedidosRepartidor[indexRepartidor],
+            ...pedidoRepartidor,
+          };
+        }
+      } else if (indexRepartidor !== -1) {
+        pedidosRepartidor.splice(indexRepartidor, 1);
+      }
+
+      await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(pedidosRepartidor));
+    } catch (storageError) {
+      console.error("Error sincronizando almacenamiento:", storageError);
     }
   };
 
@@ -150,12 +275,22 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const actualizarEstadoPedido = async (id, nuevoEstado) => {
     try {
       setPedidoProcesando(id);
-      await API.patch(`pedidos/${id}/`, { estado: nuevoEstado });
+      const response = await API.patch(`pedidos/${id}/`, { estado: nuevoEstado });
+      let pedidoActualizado = response.data;
+
+      if (!pedidoActualizado || Object.keys(pedidoActualizado).length === 0) {
+        const detalle = await API.get(`pedidos/${id}/`);
+        pedidoActualizado = detalle.data;
+      }
+
+      const pedidoPrevio = pedidos.find((pedido) => pedido.id === id) || {};
+      const pedidoCombinado = { ...pedidoPrevio, ...pedidoActualizado, id };
+
       setPedidos((prev) =>
-        prev.map((pedido) =>
-          pedido.id === id ? { ...pedido, estado: nuevoEstado } : pedido
-        )
+        prev.map((pedido) => (pedido.id === id ? pedidoCombinado : pedido))
       );
+
+      await sincronizarAlmacenamientos(pedidoCombinado);
 
       if (nuevoEstado === "aprobado") {
         Alert.alert("Pedido aceptado", "Confirmaste la preparación del pedido.");
