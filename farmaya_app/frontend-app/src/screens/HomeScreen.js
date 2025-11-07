@@ -1,10 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 
 import API from '../api/api';
+import { useTheme } from '../theme/ThemeProvider';
 
 const ORDER_STEPS = [
   { key: 'creado', label: 'Pedido creado' },
@@ -16,6 +26,8 @@ const ORDER_STEPS = [
 const normalizeStatus = (status) => (status === 'aprobado' ? 'aceptado' : status);
 
 export default function HomeScreen({ navigation }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [displayName, setDisplayName] = useState('Usuario');
   const [uploading, setUploading] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -55,34 +67,33 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    const loadUserAndConfigureHeader = async () => {
+    const loadUser = async () => {
       try {
         const stored = await AsyncStorage.getItem('user');
-        let name = 'Usuario';
         if (stored) {
           const user = JSON.parse(stored);
-          name = user.nombre || (user.email ? user.email.split('@')[0] : 'Usuario');
+          const name = user.nombre || (user.email ? user.email.split('@')[0] : 'Usuario');
+          setDisplayName(name);
         }
-        setDisplayName(name);
-
-        navigation.setOptions({
-          headerTitle: () => <Text style={styles.headerTitle}>Hola, {name}</Text>,
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Profile')}
-              style={styles.headerProfileButton}
-            >
-              <Text style={styles.profileIcon}>👤</Text>
-            </TouchableOpacity>
-          ),
-        });
       } catch (error) {
         console.error('Error cargando usuario:', error);
       }
     };
 
-    loadUserAndConfigureHeader();
-  }, [navigation]);
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.colors.background },
+      headerTitle: () => <Text style={styles.headerTitle}>Hola, {displayName}</Text>,
+      headerRight: () => (
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.headerProfileButton}>
+          <Text style={styles.profileIcon}>👤</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme, displayName, styles.headerTitle, styles.headerProfileButton, styles.profileIcon]);
 
   useFocusEffect(
     useCallback(() => {
@@ -137,10 +148,10 @@ export default function HomeScreen({ navigation }) {
 
   if (uploading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E88E5" />
-        <Text>Subiendo receta...</Text>
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Subiendo receta...</Text>
+      </SafeAreaView>
     );
   }
 
@@ -150,8 +161,8 @@ export default function HomeScreen({ navigation }) {
     : 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.progressCard}>
           <Text style={styles.progressTitle}>Seguimiento de tu pedido</Text>
           {activeOrder ? (
@@ -226,10 +237,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.cardText}>🔍 Buscar farmacia</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('MisPedidos')}
-          >
+          <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('MisPedidos')}>
             <Text style={styles.cardText}>🛒 Mis pedidos</Text>
             {ordersCount > 0 ? (
               <Text style={styles.cardBadge}>
@@ -245,7 +253,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.cardText}>⏰ Recordatorios</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={() => navigation.navigate('Home')}>
@@ -256,10 +264,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.footerText}>Buscar</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.footerButton}
-          onPress={() => navigation.navigate('MisPedidos')}
-        >
+        <TouchableOpacity style={styles.footerButton} onPress={() => navigation.navigate('MisPedidos')}>
           <Text style={styles.footerText}>Pedidos</Text>
         </TouchableOpacity>
 
@@ -270,118 +275,144 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.footerText}>Recordatorios</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { flex: 1, padding: 20 },
-  progressCard: {
-    backgroundColor: '#eef4ff',
-    borderRadius: 12,
-    padding: 18,
-    marginBottom: 24,
-  },
-  progressTitle: { fontSize: 16, fontWeight: '700', color: '#1E40AF' },
-  progressSubtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '500',
-  },
-  progressPlaceholder: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#4B5563',
-  },
-  stepsWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 18,
-  },
-  stepItem: { flex: 1, alignItems: 'center' },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    justifyContent: 'center',
-  },
-  stepCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
-    borderColor: '#9CA3AF',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepCircleCompleted: { borderColor: '#2563EB', backgroundColor: '#2563EB' },
-  stepCircleCurrent: { borderColor: '#2563EB' },
-  stepCircleText: { fontWeight: '700', color: '#4B5563' },
-  stepCircleTextActive: { color: '#fff' },
-  stepConnector: {
-    flex: 1,
-    height: 2,
-    marginHorizontal: 4,
-    borderRadius: 999,
-  },
-  stepConnectorActive: { backgroundColor: '#2563EB' },
-  stepConnectorInactive: { backgroundColor: '#CBD5F5' },
-  stepLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 6,
-    paddingHorizontal: 4,
-  },
-  stepLabelActive: { color: '#1F2937', fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#111' },
-  headerProfileButton: { marginRight: 8, padding: 6 },
-  profileIcon: { fontSize: 20 },
-  uploadButton: {
-    backgroundColor: '#e6f0ff',
-    borderRadius: 10,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  uploadIcon: { fontSize: 22, marginRight: 10 },
-  uploadText: { fontSize: 16, fontWeight: '600', color: '#084298' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, color: '#222' },
-  grid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  card: {
-    flex: 1,
-    backgroundColor: '#fafafa',
-    borderRadius: 10,
-    padding: 16,
-    marginHorizontal: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 1,
-  },
-  cardDisabled: { opacity: 0.5 },
-  cardText: { fontSize: 14, textAlign: 'center', color: '#333' },
-  cardBadge: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#1E40AF',
-    fontWeight: '600',
-  },
-  footer: {
-    height: 60,
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  footerText: { fontSize: 12, color: '#333' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-});
+const createStyles = (theme) =>
+  StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.colors.background },
+    scrollContent: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 24 },
+    progressCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      padding: 24,
+      marginTop: 16,
+      marginBottom: 32,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
+    },
+    progressTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
+    progressSubtitle: {
+      marginTop: 8,
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      fontWeight: '500',
+    },
+    progressPlaceholder: {
+      marginTop: 12,
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    stepsWrapper: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 28,
+    },
+    stepItem: { flex: 1, alignItems: 'center' },
+    stepRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: '100%',
+      justifyContent: 'center',
+    },
+    stepCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 2,
+      borderColor: theme.colors.muted,
+      backgroundColor: theme.colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepCircleCompleted: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary },
+    stepCircleCurrent: { borderColor: theme.colors.accent },
+    stepCircleText: { fontWeight: '700', color: theme.colors.textSecondary },
+    stepCircleTextActive: { color: theme.colors.buttonText },
+    stepConnector: {
+      flex: 1,
+      height: 2,
+      marginHorizontal: 4,
+      borderRadius: 999,
+    },
+    stepConnectorActive: { backgroundColor: theme.colors.primary },
+    stepConnectorInactive: { backgroundColor: theme.colors.muted },
+    stepLabel: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginTop: 10,
+      paddingHorizontal: 4,
+    },
+    stepLabelActive: { color: theme.colors.text, fontWeight: '600' },
+    headerTitle: { fontSize: 18, fontWeight: '600', color: theme.colors.text },
+    headerProfileButton: { marginRight: 8, padding: 6 },
+    profileIcon: { fontSize: 20 },
+    uploadButton: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+      paddingVertical: 18,
+      paddingHorizontal: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 30,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 12,
+    },
+    uploadIcon: { fontSize: 22 },
+    uploadText: { fontSize: 16, fontWeight: '600', color: theme.colors.accent },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      marginBottom: 18,
+      color: theme.colors.text,
+    },
+    grid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+    card: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+      padding: 20,
+      marginHorizontal: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    cardDisabled: { opacity: 0.55 },
+    cardText: { fontSize: 15, textAlign: 'center', color: theme.colors.text, fontWeight: '600' },
+    cardBadge: {
+      marginTop: 8,
+      fontSize: 12,
+      color: theme.colors.accent,
+      fontWeight: '600',
+    },
+    footer: {
+      height: 68,
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      paddingHorizontal: 12,
+    },
+    footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    footerText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: { marginTop: 12, color: theme.colors.textSecondary, fontSize: 15 },
+  });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,8 +15,11 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
+import { useTheme } from "../theme/ThemeProvider";
 
 export default function HomeFarmaciaScreen({ navigation }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [farmacia, setFarmacia] = useState(null);
   const [productos, setProductos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -311,8 +314,8 @@ export default function HomeFarmaciaScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1E88E5" />
-        <Text>Cargando...</Text>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Cargando...</Text>
       </View>
     );
   }
@@ -341,10 +344,10 @@ export default function HomeFarmaciaScreen({ navigation }) {
         pedidos.map((p) => (
           <View key={p.id} style={styles.cardPedido}>
             <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
-            <Text>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
-            <Text>Producto: {p.producto_nombre}</Text>
-            <Text>Cantidad: {p.cantidad}</Text>
-            <Text>Método de pago: {p.metodo_pago}</Text>
+            <Text style={styles.cardDetail}>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
+            <Text style={styles.cardDetail}>Producto: {p.producto_nombre}</Text>
+            <Text style={styles.cardDetail}>Cantidad: {p.cantidad}</Text>
+            <Text style={styles.cardDetail}>Método de pago: {p.metodo_pago}</Text>
             <Text style={styles.estado}>Estado: {p.estado}</Text>
 
             {p.receta?.archivo_url && (
@@ -383,7 +386,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
       {/* 🔹 Productos */}
       <Text style={styles.subtitle}>🧾 Mis productos</Text>
       <TouchableOpacity
-        style={[styles.btnPrimary, { backgroundColor: "#43a047" }]}
+        style={[styles.btnPrimary, styles.btnAccent]}
         onPress={() => navigation.navigate("AgregarProducto")}
       >
         <Text style={styles.btnText}>➕ Agregar producto</Text>
@@ -400,11 +403,11 @@ export default function HomeFarmaciaScreen({ navigation }) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardNombre}>{item.nombre}</Text>
                 {item.presentacion ? (
-                  <Text>💊 Presentación: {item.presentacion}</Text>
+                  <Text style={styles.cardDetail}>💊 Presentación: {item.presentacion}</Text>
                 ) : null}
-                <Text>💰 ${item.precio}</Text>
-                <Text>📦 Stock: {item.stock}</Text>
-                <Text>
+                <Text style={styles.cardDetail}>💰 ${item.precio}</Text>
+                <Text style={styles.cardDetail}>📦 Stock: {item.stock}</Text>
+                <Text style={styles.cardDetail}>
                   {item.requiere_receta ? "📋 Requiere receta" : "✅ Sin receta"}
                 </Text>
               </View>
@@ -464,16 +467,16 @@ export default function HomeFarmaciaScreen({ navigation }) {
               <Switch value={requiereReceta} onValueChange={setRequiereReceta} />
             </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.btnGuardar} onPress={guardarCambios}>
-                <Text style={styles.buttonText}>Guardar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnGuardar, { backgroundColor: "#9e9e9e" }]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.buttonText}>Cancelar</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.btnGuardar} onPress={guardarCambios}>
+                  <Text style={styles.buttonText}>Guardar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnGuardar, styles.btnCancelar]}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.buttonTextMuted}>Cancelar</Text>
+                </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -483,122 +486,160 @@ export default function HomeFarmaciaScreen({ navigation }) {
 }
 
 // 🔹 Estilos
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 5 },
-  info: { fontSize: 15, color: "#444" },
-  subtitle: { fontSize: 18, fontWeight: "bold", marginTop: 25, marginBottom: 10 },
-  btnPrimary: {
-    backgroundColor: "#1E88E5",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  emptyText: { textAlign: "center", marginTop: 10, color: "#777" },
-  card: {
-    backgroundColor: "#f6f6f6",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  cardPedido: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardTitle: { fontWeight: "bold", fontSize: 16, marginBottom: 5 },
-  estado: { marginTop: 4, fontWeight: "600" },
-  cardNombre: { fontSize: 18, fontWeight: "bold" },
-  cardActions: { flexDirection: "row", marginLeft: 10 },
-  btnEditar: { fontSize: 22, marginHorizontal: 6 },
-  btnEliminar: { fontSize: 22, marginHorizontal: 6, color: "red" },
-  btnSecundario: {
-    marginTop: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    backgroundColor: "#e3f2fd",
-    alignSelf: "flex-start",
-  },
-  btnSecundarioText: {
-    color: "#1565c0",
-    fontWeight: "600",
-  },
-  accionesPedido: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-    gap: 10,
-  },
-  btnPedido: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  btnAceptar: {
-    backgroundColor: "#43a047",
-  },
-  btnRechazar: {
-    backgroundColor: "#e53935",
-  },
-  btnPedidoText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 20,
-    width: "85%",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-  },
-  switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
-  },
-  btnGuardar: {
-    backgroundColor: "#43a047",
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    width: "40%",
-  },
-  buttonText: { color: "#fff", fontWeight: "bold" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-});
+const createStyles = (theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background, padding: 20 },
+    title: {
+      fontSize: 24,
+      fontWeight: "bold",
+      marginBottom: 5,
+      color: theme.colors.text,
+    },
+    info: { fontSize: 15, color: theme.colors.textSecondary },
+    subtitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      marginTop: 25,
+      marginBottom: 12,
+      color: theme.colors.text,
+    },
+    btnPrimary: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center",
+      marginVertical: 12,
+      shadowColor: theme.colors.primary,
+      shadowOpacity: 0.22,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    btnText: { color: theme.colors.buttonText, fontWeight: "bold", fontSize: 16 },
+    btnAccent: { backgroundColor: theme.colors.accent },
+    emptyText: { textAlign: "center", marginTop: 12, color: theme.colors.textSecondary },
+    card: {
+      backgroundColor: theme.colors.surface,
+      padding: 16,
+      borderRadius: 14,
+      marginBottom: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 10,
+    },
+    cardPedido: {
+      backgroundColor: theme.colors.surface,
+      padding: 18,
+      borderRadius: 16,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 10,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    cardTitle: { fontWeight: "bold", fontSize: 16, marginBottom: 4, color: theme.colors.text },
+    estado: { marginTop: 4, fontWeight: "600", color: theme.colors.accent },
+    cardNombre: { fontSize: 18, fontWeight: "bold", color: theme.colors.text },
+    cardActions: { flexDirection: "row", marginLeft: 10 },
+    btnEditar: { fontSize: 22, marginHorizontal: 6, color: theme.colors.accent },
+    btnEliminar: { fontSize: 22, marginHorizontal: 6, color: "#D97767" },
+    cardDetail: { color: theme.colors.textSecondary, marginBottom: 4 },
+    btnSecundario: {
+      marginTop: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      backgroundColor: theme.colors.muted,
+      alignSelf: "flex-start",
+    },
+    btnSecundarioText: {
+      color: theme.colors.accent,
+      fontWeight: "600",
+    },
+    accionesPedido: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 14,
+      gap: 12,
+    },
+    btnPedido: {
+      flex: 1,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    btnAceptar: {
+      backgroundColor: theme.colors.primary,
+    },
+    btnRechazar: {
+      backgroundColor: theme.colors.accent,
+    },
+    btnPedidoText: {
+      color: theme.colors.buttonText,
+      fontWeight: "700",
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(0,0,0,0.4)",
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      padding: 22,
+      width: "90%",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginBottom: 18,
+      textAlign: "center",
+      color: theme.colors.text,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 14,
+      backgroundColor: theme.colors.card,
+      color: theme.colors.text,
+    },
+    switchContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      marginTop: 16,
+      gap: 12,
+    },
+    btnGuardar: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center",
+      flex: 1,
+    },
+    btnCancelar: {
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    buttonText: { color: theme.colors.buttonText, fontWeight: "bold" },
+    buttonTextMuted: { color: theme.colors.text, fontWeight: "bold" },
+    center: { flex: 1, justifyContent: "center", alignItems: "center" },
+    loadingText: { marginTop: 12, color: theme.colors.textSecondary },
+  });
