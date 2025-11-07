@@ -54,6 +54,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             'latitud', 'longitud'
         ]
 
+    def validate_email(self, value):
+        normalized_email = value.lower()
+        if User.objects.filter(email__iexact=normalized_email).exists():
+            raise serializers.ValidationError('Ese correo ya se encuentra en uso.')
+        return normalized_email
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(**validated_data)
@@ -135,6 +141,11 @@ class PedidoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'repartidor': {'allow_null': True, 'required': False}
         }
+
+    def validate_direccion_entrega(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Debes proporcionar una dirección de entrega.')
+        return value.strip()
 
     def validate(self, attrs):
         request = self.context.get('request')
