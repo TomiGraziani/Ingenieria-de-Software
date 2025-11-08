@@ -1,7 +1,19 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+
+const normalizeRepartidorStatus = (estado) => {
+  const value = (estado || "").toString().trim().toLowerCase();
+  const map = {
+    "en camino": "en_camino",
+    en_camino: "en_camino",
+    recogido: "en_camino",
+    retirado: "en_camino",
+  };
+
+  return map[value] || value;
+};
 
 export default function HomeRepartidorScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
@@ -28,7 +40,29 @@ export default function HomeRepartidorScreen({ navigation }) {
     const stored = await AsyncStorage.getItem("pedidosRepartidor");
 
     if (stored) {
-      setPedidos(JSON.parse(stored));
+      let parsed = [];
+      try {
+        const raw = JSON.parse(stored);
+        parsed = Array.isArray(raw) ? raw : [];
+      } catch (error) {
+        console.error("Error leyendo pedidos del repartidor:", error);
+      }
+
+      const normalized = parsed.map((pedido) => {
+        const estadoNormalizado = normalizeRepartidorStatus(pedido?.estado);
+        if (estadoNormalizado === pedido?.estado) {
+          return pedido;
+        }
+
+        return { ...pedido, estado: estadoNormalizado };
+      });
+
+      setPedidos(normalized);
+
+      const hasChanges = normalized.some((pedido, index) => pedido !== parsed[index]);
+      if (hasChanges) {
+        await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(normalized));
+      }
     } else {
       // ✅ Pedidos simulados LISTOS para repartidor
       const mockPedidos = [
@@ -100,11 +134,19 @@ export default function HomeRepartidorScreen({ navigation }) {
   };
 
   // ✅ Solo mostrar pedidos confirmados
-  const pedidosDisponibles = pedidos.filter(p => p.estado === "confirmado");
+  const pedidosDisponibles = useMemo(
+    () => pedidos.filter((p) => normalizeRepartidorStatus(p.estado) === "confirmado"),
+    [pedidos]
+  );
 
   // ✅ Si tiene un pedido tomado, ir a pantalla activa
-  const pedidoActivo = pedidos.find(
-    (p) => p.estado === "asignado" || p.estado === "retirado"
+  const pedidoActivo = useMemo(
+    () =>
+      pedidos.find((p) => {
+        const estado = normalizeRepartidorStatus(p.estado);
+        return estado === "asignado" || estado === "en_camino";
+      }),
+    [pedidos]
   );
 
   useEffect(() => {
@@ -140,8 +182,8 @@ export default function HomeRepartidorScreen({ navigation }) {
 
     setPedidos(updated);
     await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-    await updateClienteOrderStatus(id, "en_camino");
-    await updateFarmaciaOrderStatus(id, "en_camino");
+    await updateClienteOrderStatus(id, "aceptado");
+    await updateFarmaciaOrderStatus(id, "aceptado");
 
     const pedido = updated.find(p => p.id === id);
     if (pedido) {
