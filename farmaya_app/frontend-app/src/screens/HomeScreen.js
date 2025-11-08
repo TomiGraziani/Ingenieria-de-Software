@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -63,6 +63,7 @@ export default function HomeScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('Usuario');
   const [activeOrder, setActiveOrder] = useState(null);
   const [ordersCount, setOrdersCount] = useState(0);
+  const lastRejectedAlertId = useRef(null);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -91,6 +92,31 @@ export default function HomeScreen({ navigation }) {
       setOrdersCount(sorted.length);
       const running = sorted.find((order) => isActiveStatus(order.estado));
       setActiveOrder(running || null);
+
+      const latestRejected = sorted.find(
+        (order) => (order?.estado || '').toString().toLowerCase() === 'rechazado'
+      );
+
+      if (!running && latestRejected) {
+        const rejectionIdentifier =
+          latestRejected.id ??
+          latestRejected.numero ??
+          latestRejected.codigo ??
+          latestRejected.uuid ??
+          latestRejected.createdAt ??
+          latestRejected.fecha ??
+          JSON.stringify(latestRejected);
+
+        if (lastRejectedAlertId.current !== rejectionIdentifier) {
+          lastRejectedAlertId.current = rejectionIdentifier;
+          Alert.alert(
+            'Pedido rechazado',
+            'La farmacia ha rechazado tu pedido. Podés revisar tus pedidos para más información.'
+          );
+        }
+      } else if (!latestRejected) {
+        lastRejectedAlertId.current = null;
+      }
     } catch (error) {
       console.error('Error cargando pedidos del cliente:', error);
       setActiveOrder(null);
