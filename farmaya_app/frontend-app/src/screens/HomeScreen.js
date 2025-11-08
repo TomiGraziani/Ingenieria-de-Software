@@ -22,6 +22,15 @@ const ORDER_STEPS = [
   { key: 'entregado', label: 'Entregado' },
 ];
 
+const STATUS_RANK = {
+  creado: 0,
+  aceptado: 1,
+  en_camino: 2,
+  entregado: 3,
+};
+
+const CANCELED_STATES = new Set(['cancelado', 'rechazado']);
+
 const normalizeOrderFromApi = (order) => {
   if (!order || typeof order !== 'object') {
     return null;
@@ -106,6 +115,40 @@ const isActiveStatus = (status) => {
   ].includes(value);
 };
 
+const mergeOrderStatus = (order, storedOrders) => {
+  const storedMatch = storedOrders.find(
+    (stored) => stored?.id?.toString() === order?.id?.toString()
+  );
+
+  const apiNormalized = normalizeStatus(order?.estado);
+
+  if (!storedMatch) {
+    if (CANCELED_STATES.has(apiNormalized)) {
+      return { ...order, estado: apiNormalized };
+    }
+    return { ...order, estado: apiNormalized };
+  }
+
+  const storedNormalized = normalizeStatus(storedMatch?.estado);
+
+  if (CANCELED_STATES.has(apiNormalized)) {
+    return { ...order, estado: apiNormalized };
+  }
+
+  if (CANCELED_STATES.has(storedNormalized)) {
+    return { ...order, estado: storedNormalized };
+  }
+
+  const apiRank = STATUS_RANK[apiNormalized] ?? -1;
+  const storedRank = STATUS_RANK[storedNormalized] ?? -1;
+
+  if (storedRank > apiRank) {
+    return { ...order, estado: storedNormalized };
+  }
+
+  return { ...order, estado: apiNormalized };
+};
+
 export default function HomeScreen({ navigation }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -119,13 +162,27 @@ export default function HomeScreen({ navigation }) {
     try {
       const storageKey = await getClienteOrdersStorageKey();
       let orders = null;
+      let storedBeforeFetch = [];
+
+      try {
+        const existingRaw = await AsyncStorage.getItem(storageKey);
+        if (existingRaw) {
+          const parsedExisting = JSON.parse(existingRaw);
+          if (Array.isArray(parsedExisting)) {
+            storedBeforeFetch = parsedExisting;
+          }
+        }
+      } catch (existingError) {
+        console.error('Error leyendo pedidos almacenados del cliente:', existingError);
+      }
 
       try {
         const response = await API.get('pedidos/mis/');
         const data = Array.isArray(response.data) ? response.data : [];
         const normalized = data
           .map(normalizeOrderFromApi)
-          .filter((order) => order && order.id != null);
+          .filter((order) => order && order.id != null)
+          .map((order) => mergeOrderStatus(order, storedBeforeFetch));
 
         await AsyncStorage.setItem(storageKey, JSON.stringify(normalized));
         orders = normalized;
