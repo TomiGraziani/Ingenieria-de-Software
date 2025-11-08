@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from "react
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
+import getClienteOrdersStorageKey from "../utils/storageKeys";
+
 const normalizeRepartidorStatus = (estado) => {
   const value = (estado || "").toString().trim().toLowerCase();
   const map = {
@@ -103,15 +105,18 @@ export default function HomeRepartidorScreen({ navigation }) {
 
   const updateClienteOrderStatus = async (id, estado) => {
     try {
-      const stored = await AsyncStorage.getItem("clienteOrders");
+      const storageKey = await getClienteOrdersStorageKey();
+      const stored = await AsyncStorage.getItem(storageKey);
       if (!stored) return;
-      const orders = JSON.parse(stored);
+      const ordersRaw = JSON.parse(stored);
+      const orders = Array.isArray(ordersRaw) ? ordersRaw : [];
+      if (orders.length === 0) return;
       const updated = orders.map((order) =>
         order.id?.toString() === id.toString()
           ? { ...order, estado }
           : order
       );
-      await AsyncStorage.setItem("clienteOrders", JSON.stringify(updated));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (error) {
       console.error("Error actualizando estado del pedido del cliente:", error);
     }

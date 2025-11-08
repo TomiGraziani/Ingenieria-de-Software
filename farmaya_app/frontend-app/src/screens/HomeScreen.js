@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme/ThemeProvider';
+import getClienteOrdersStorageKey from '../utils/storageKeys';
 
 const ORDER_STEPS = [
   { key: 'creado', label: 'Pedido creado' },
@@ -66,7 +67,8 @@ export default function HomeScreen({ navigation }) {
 
   const loadOrders = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem('clienteOrders');
+      const storageKey = await getClienteOrdersStorageKey();
+      const stored = await AsyncStorage.getItem(storageKey);
       if (!stored) {
         setActiveOrder(null);
         setOrdersCount(0);

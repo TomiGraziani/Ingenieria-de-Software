@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import getClienteOrdersStorageKey from "../utils/storageKeys";
+
 const normalizeStatus = (status) => {
   const value = (status || "").toString().trim().toLowerCase();
   const map = {
@@ -59,15 +61,18 @@ export default function PedidoActivoScreen({ route, navigation }) {
 
   const updateClienteOrderStatus = async (estado) => {
     try {
-      const stored = await AsyncStorage.getItem("clienteOrders");
+      const storageKey = await getClienteOrdersStorageKey();
+      const stored = await AsyncStorage.getItem(storageKey);
       if (!stored) return;
-      const orders = JSON.parse(stored);
+      const ordersRaw = JSON.parse(stored);
+      const orders = Array.isArray(ordersRaw) ? ordersRaw : [];
+      if (orders.length === 0) return;
       const updated = orders.map((order) =>
         order.id?.toString() === pedidoId
           ? { ...order, estado }
           : order
       );
-      await AsyncStorage.setItem("clienteOrders", JSON.stringify(updated));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (error) {
       console.error("Error actualizando pedido del cliente:", error);
     }
