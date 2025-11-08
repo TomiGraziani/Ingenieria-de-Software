@@ -16,26 +16,28 @@ import API from '../api/api';
 import getClienteOrdersStorageKey from '../utils/storageKeys';
 
 const ORDER_STEPS = [
-  { key: 'creado', label: 'Pedido creado' },
-  { key: 'en_camino', label: 'En camino' },
+  { key: 'creado', label: 'Pedido Creado' },
+  { key: 'aceptado', label: 'Pedido Aceptado' },
+  { key: 'en_camino', label: 'En Camino' },
   { key: 'entregado', label: 'Entregado' },
 ];
 
 const STATUS_RANK = {
   creado: 0,
-  aceptado: 0,
-  aprobado: 0,
-  confirmado: 0,
-  en_preparacion: 0,
-  preparando: 0,
-  asignado: 0,
-  en_camino: 1,
-  retirado: 1,
-  recogido: 1,
-  enviado: 1,
-  entregado: 2,
-  recibido: 2,
-  completado: 2,
+  pendiente: 0,
+  aceptado: 1,
+  aprobado: 1,
+  confirmado: 1,
+  en_preparacion: 1,
+  preparando: 1,
+  asignado: 1,
+  en_camino: 2,
+  retirado: 2,
+  recogido: 2,
+  enviado: 2,
+  entregado: 3,
+  recibido: 3,
+  completado: 3,
 };
 
 const CANCELED_STATES = new Set(['cancelado', 'rechazado']);
@@ -94,12 +96,12 @@ const normalizeStatus = (status) => {
   const map = {
     pendiente: 'creado',
     creado: 'creado',
-    aceptado: 'creado',
-    aprobado: 'creado',
-    confirmado: 'creado',
-    en_preparacion: 'creado',
-    preparando: 'creado',
-    asignado: 'creado',
+    aceptado: 'aceptado',
+    aprobado: 'aceptado',
+    confirmado: 'aceptado',
+    en_preparacion: 'aceptado',
+    preparando: 'aceptado',
+    asignado: 'aceptado',
     'en camino': 'en_camino',
     en_camino: 'en_camino',
     recogido: 'en_camino',
@@ -151,11 +153,16 @@ const mergeOrderStatus = (order, storedOrders) => {
   const apiRank = STATUS_RANK[apiNormalized] ?? -1;
   const storedRank = STATUS_RANK[storedNormalized] ?? -1;
 
+  // Priorizar el estado con mayor rango (más avanzado)
+  // Si tienen el mismo rango, priorizar el del API (más reciente)
   if (storedRank > apiRank) {
     return { ...order, estado: storedNormalized };
+  } else if (apiRank > storedRank) {
+    return { ...order, estado: apiNormalized };
+  } else {
+    // Si tienen el mismo rango, priorizar el del API
+    return { ...order, estado: apiNormalized };
   }
-
-  return { ...order, estado: apiNormalized };
 };
 
 export default function HomeScreen({ navigation }) {
@@ -304,9 +311,10 @@ export default function HomeScreen({ navigation }) {
   );
 
   useEffect(() => {
+    // Actualizar cada 2 segundos para ser más responsivo a cambios de estado
     const interval = setInterval(() => {
       loadOrders();
-    }, 5000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [loadOrders]);
@@ -315,9 +323,15 @@ export default function HomeScreen({ navigation }) {
   const activeStatus = hasActiveOrder ? normalizeStatus(activeOrder?.estado) : null;
   const currentStepIndex = hasActiveOrder
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
-    : 0;
-  const finalStepReached =
-    hasActiveOrder && (activeStatus === 'en_camino' || activeStatus === 'entregado');
+    : -1;
+  
+  // Una etapa está completada si su índice es menor o igual al índice de la etapa actual
+  // Esto significa que cuando el estado es "creado", la etapa 1 (índice 0) está completada
+  // Cuando el estado es "aceptado", las etapas 1 y 2 (índices 0 y 1) están completadas, etc.
+  const isStepCompleted = (index) => {
+    if (currentStepIndex === -1) return false;
+    return index <= currentStepIndex;
+  };
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -331,11 +345,8 @@ export default function HomeScreen({ navigation }) {
             </Text>
             <View style={styles.stepsWrapper}>
               {ORDER_STEPS.map((step, index) => {
-                const isFinalStep = step.key === 'entregado';
                 const isCurrent = step.key === activeStatus;
-                const isCompleted =
-                  index < currentStepIndex ||
-                  (isFinalStep && finalStepReached);
+                const isCompleted = isStepCompleted(index);
                 const isReached = isCompleted || isCurrent;
                 return (
                   <View key={step.key} style={styles.stepItem}>
@@ -360,8 +371,7 @@ export default function HomeScreen({ navigation }) {
                         <View
                           style={[
                             styles.stepConnector,
-                            index < currentStepIndex ||
-                            (index === currentStepIndex && finalStepReached)
+                            isStepCompleted(index + 1)
                               ? styles.stepConnectorActive
                               : styles.stepConnectorInactive,
                           ]}
@@ -402,7 +412,7 @@ export default function HomeScreen({ navigation }) {
             style={[styles.actionButton, hasActiveOrder && styles.actionButtonCompact]}
             onPress={() => navigation.navigate('MisPedidos')}
           >
-            <Text style={styles.actionButtonText}>📦 Pedidos activos</Text>
+            <Text style={styles.actionButtonText}>📦 Mis pedidos</Text>
             {ordersCount > 0 ? (
               <Text style={styles.actionBadge}>
                 {ordersCount} {ordersCount === 1 ? 'pedido' : 'pedidos'}

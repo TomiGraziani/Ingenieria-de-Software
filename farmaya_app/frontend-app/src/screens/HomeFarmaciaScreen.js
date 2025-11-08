@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -62,7 +63,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
   };
 
   // 🔹 Cargar productos de la farmacia autenticada
-  const cargarProductos = async () => {
+  const cargarProductos = useCallback(async () => {
     try {
       const response = await API.get("productos/");
       setProductos(response.data);
@@ -70,7 +71,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
       console.error("❌ Error al cargar productos:", error.response?.data || error);
       Alert.alert("Error", "No se pudieron cargar los productos.");
     }
-  };
+  }, []);
 
   const normalizarPedido = (pedido) => {
     if (!pedido) return null;
@@ -331,7 +332,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
     }
   };
 
-  // 🔹 useEffects
+  // 🔹 useEffects - carga inicial
   useEffect(() => {
     (async () => {
       await cargarFarmacia();
@@ -339,7 +340,16 @@ export default function HomeFarmaciaScreen({ navigation }) {
       await cargarPedidos();
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 🔹 Refrescar productos cuando se vuelve a la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      // Refrescar productos cada vez que se vuelve a la pantalla
+      cargarProductos();
+    }, [cargarProductos])
+  );
 
   const abrirReceta = async (url) => {
     if (!url) {

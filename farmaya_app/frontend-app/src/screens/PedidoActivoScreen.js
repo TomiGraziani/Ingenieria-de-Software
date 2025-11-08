@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import getClienteOrdersStorageKey from "../utils/storageKeys";
+import API from "../api/api";
 
 const normalizeStatus = (status) => {
   const value = (status || "").toString().trim().toLowerCase();
@@ -96,6 +97,17 @@ export default function PedidoActivoScreen({ route, navigation }) {
 
   const marcarRetirado = async () => {
     try {
+      // Actualizar en el backend primero
+      try {
+        await API.patch(`pedidos/${pedidoId}/estado/`, {
+          estado: "en_camino",
+        });
+      } catch (apiError) {
+        console.error("Error actualizando estado en el backend:", apiError.response?.data || apiError);
+        // Continuar con la actualización local aunque falle el backend
+      }
+
+      // Actualizar en AsyncStorage local
       const stored = await AsyncStorage.getItem("pedidosRepartidor");
       const pedidos = stored ? JSON.parse(stored) : [];
       const pedidosArray = Array.isArray(pedidos) ? pedidos : [];
@@ -111,11 +123,23 @@ export default function PedidoActivoScreen({ route, navigation }) {
       Alert.alert("📦 Pedido retirado de farmacia", "Procede a entregar.");
     } catch (error) {
       console.error("Error al marcar pedido como retirado:", error);
+      Alert.alert("Error", "No se pudo actualizar el estado del pedido.");
     }
   };
 
   const marcarEntregado = async () => {
     try {
+      // Actualizar en el backend primero
+      try {
+        await API.patch(`pedidos/${pedidoId}/estado/`, {
+          estado: "entregado",
+        });
+      } catch (apiError) {
+        console.error("Error actualizando estado en el backend:", apiError.response?.data || apiError);
+        // Continuar con la actualización local aunque falle el backend
+      }
+
+      // Actualizar en AsyncStorage local
       const stored = await AsyncStorage.getItem("pedidosRepartidor");
       const pedidos = stored ? JSON.parse(stored) : [];
       const pedidosArray = Array.isArray(pedidos) ? pedidos : [];
@@ -130,6 +154,7 @@ export default function PedidoActivoScreen({ route, navigation }) {
       navigation.replace("HomeRepartidor");
     } catch (error) {
       console.error("Error al marcar pedido como entregado:", error);
+      Alert.alert("Error", "No se pudo actualizar el estado del pedido.");
     }
   };
 

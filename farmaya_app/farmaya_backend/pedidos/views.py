@@ -203,9 +203,6 @@ class ActualizarEstadoPedidoView(APIView):
             pk=pedido_id,
         )
 
-        if request.user != pedido.farmacia:
-            return Response(status=status.HTTP_403_FORBIDDEN)
-
         nuevo_estado = request.data.get('estado')
         if nuevo_estado not in dict(Pedido.ESTADOS):
             return Response(
@@ -213,17 +210,34 @@ class ActualizarEstadoPedidoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if nuevo_estado == 'aceptado':
-            pendientes = pedido.detalles.filter(
-                requiere_receta=True
-            ).exclude(estado_receta='aprobada')
-            if pendientes.exists():
+        # La farmacia puede actualizar a cualquier estado
+        if request.user == pedido.farmacia:
+            if nuevo_estado == 'aceptado':
+                pendientes = pedido.detalles.filter(
+                    requiere_receta=True
+                ).exclude(estado_receta='aprobada')
+                if pendientes.exists():
+                    return Response(
+                        {
+                            'detail': 'No podés aceptar el pedido hasta aprobar todas las recetas requeridas.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+        # Los repartidores solo pueden actualizar a 'en_camino' o 'entregado'
+        elif request.user.tipo_usuario == 'repartidor':
+            if nuevo_estado not in ['en_camino', 'entregado']:
                 return Response(
-                    {
-                        'detail': 'No podés aceptar el pedido hasta aprobar todas las recetas requeridas.'
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {'detail': 'Los repartidores solo pueden actualizar el estado a "en_camino" o "entregado".'},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
+            # Solo pueden actualizar si el pedido está aceptado o en preparación
+            if pedido.estado not in ['aceptado', 'en_preparacion', 'en_camino']:
+                return Response(
+                    {'detail': 'Solo podés actualizar pedidos que estén aceptados o en preparación.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            return Response(status=status.HTTP_403_FORBIDDEN)
 
         pedido.estado = nuevo_estado
         pedido.save(update_fields=['estado'])

@@ -9,10 +9,14 @@ import {
   Alert,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const formatRecetaNombre = (receta) => {
@@ -69,6 +73,50 @@ export default function ProductosFarmaciaScreen({ route }) {
         }
       };
 
+      const tomarFoto = async () => {
+        try {
+          // Solicitar permisos de cámara
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permisos necesarios",
+              "Se necesitan permisos de cámara para tomar una foto de la receta."
+            );
+            safeResolve(null);
+            return;
+          }
+
+          // Abrir la cámara
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: false,
+            quality: 0.8,
+          });
+
+          if (result.canceled) {
+            safeResolve(null);
+            return;
+          }
+
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            // Convertir el resultado de ImagePicker al formato esperado
+            const receta = {
+              uri: asset.uri,
+              name: `receta_${Date.now()}.jpg`,
+              mimeType: "image/jpeg",
+              type: "image/jpeg",
+            };
+            safeResolve(receta);
+          } else {
+            safeResolve(null);
+          }
+        } catch (error) {
+          console.error("Error al tomar foto:", error);
+          Alert.alert("Error", "No se pudo tomar la foto de la receta.");
+          safeResolve(null);
+        }
+      };
+
       const abrirPicker = async () => {
         try {
           const result = await DocumentPicker.getDocumentAsync({
@@ -77,10 +125,6 @@ export default function ProductosFarmaciaScreen({ route }) {
           });
 
           if (result.canceled) {
-            Alert.alert(
-              "Receta obligatoria",
-              "Debés adjuntar una receta para este producto."
-            );
             safeResolve(null);
             return;
           }
@@ -98,7 +142,8 @@ export default function ProductosFarmaciaScreen({ route }) {
         "Este medicamento requiere que adjuntes una receta médica.",
         [
           { text: "Cancelar", style: "cancel", onPress: () => safeResolve(null) },
-          { text: "Adjuntar archivo", onPress: () => abrirPicker() },
+          { text: "📷 Tomar foto", onPress: () => tomarFoto() },
+          { text: "📁 Seleccionar archivo", onPress: () => abrirPicker() },
         ],
         { cancelable: false }
       );
@@ -262,7 +307,7 @@ export default function ProductosFarmaciaScreen({ route }) {
 
       const nuevoPedido = {
         id: pedidoCreado?.id,
-        estado: pedidoCreado?.estado || "pendiente",
+        estado: "creado", // Etapa 1: Pedido Creado - se marca como realizada cuando el cliente confirma
         direccionEntrega: pedidoCreado?.direccion_entrega || direccionSeleccionada,
         direccion_entrega: pedidoCreado?.direccion_entrega || direccionSeleccionada,
         productoNombre: resumenProductos,
@@ -360,6 +405,7 @@ export default function ProductosFarmaciaScreen({ route }) {
       <FlatList
         data={productos}
         keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={{ paddingBottom: carrito.length > 0 ? 200 : 0 }}
         ListEmptyComponent={
           <Text style={styles.emptyText}>Esta farmacia no tiene productos cargados.</Text>
         }
@@ -391,7 +437,8 @@ export default function ProductosFarmaciaScreen({ route }) {
       />
 
       {carrito.length > 0 ? (
-        <View style={styles.cartContainer}>
+        <SafeAreaView edges={['bottom']} style={styles.cartContainerWrapper}>
+          <View style={styles.cartContainer}>
           <Text style={styles.cartTitle}>🧺 Pedido actual</Text>
           {carrito.map((item) => (
             <View key={item.producto.id} style={styles.cartItem}>
@@ -447,6 +494,7 @@ export default function ProductosFarmaciaScreen({ route }) {
             </Text>
           </TouchableOpacity>
         </View>
+        </SafeAreaView>
       ) : null}
 
       <Modal
@@ -455,7 +503,10 @@ export default function ProductosFarmaciaScreen({ route }) {
         animationType="fade"
         onRequestClose={cerrarModalProducto}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
               {productoSeleccionado?.nombre || "Producto"}
@@ -506,7 +557,7 @@ export default function ProductosFarmaciaScreen({ route }) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -515,7 +566,10 @@ export default function ProductosFarmaciaScreen({ route }) {
         animationType="fade"
         onRequestClose={cerrarModalDireccion}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Dirección de entrega</Text>
             <Text style={styles.modalSubtitle}>
@@ -556,7 +610,7 @@ export default function ProductosFarmaciaScreen({ route }) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -591,13 +645,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButtonText: { color: "#fff", fontWeight: "600" },
+  cartContainerWrapper: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#eef4ff",
+    borderTopWidth: 1,
+    borderTopColor: "#bbd0ff",
+    zIndex: 1000,
+  },
   cartContainer: {
-    marginTop: 12,
     padding: 16,
     borderRadius: 12,
     backgroundColor: "#eef4ff",
-    borderWidth: 1,
-    borderColor: "#bbd0ff",
   },
   cartTitle: { fontSize: 18, fontWeight: "700", color: "#1E88E5", marginBottom: 12 },
   cartItem: {

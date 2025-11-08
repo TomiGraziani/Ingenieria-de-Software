@@ -8,6 +8,8 @@ import {
   Switch,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import API from "../api/api";
 
@@ -40,7 +42,13 @@ export default function AgregarProductoScreen({ navigation }) {
 
       console.log("✅ Producto creado:", response.data);
       Alert.alert("✅ Éxito", "Producto agregado correctamente.", [
-        { text: "OK", onPress: () => navigation.goBack() },
+        { 
+          text: "OK", 
+          onPress: () => {
+            // Volver a la pantalla anterior, useFocusEffect se encargará de refrescar
+            navigation.goBack();
+          }
+        },
       ]);
     } catch (error) {
       console.error("❌ Error al crear producto:", error.response?.data || error);
@@ -54,8 +62,12 @@ export default function AgregarProductoScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>🧾 Nuevo producto</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      <ScrollView style={styles.scrollView}>
+        <Text style={styles.title}>🧾 Nuevo producto</Text>
 
       <TextInput
         style={styles.input}
@@ -106,13 +118,15 @@ export default function AgregarProductoScreen({ navigation }) {
         onPress={handleGuardarProducto}
         disabled={loading}
       />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 // 🎨 Estilos
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 20 },
+  container: { flex: 1, backgroundColor: "#fff" },
+  scrollView: { flex: 1, padding: 20 },
   title: {
     fontSize: 24,
     fontWeight: "bold",
