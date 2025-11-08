@@ -103,6 +103,8 @@ export default function HomeScreen({ navigation }) {
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
     : 0;
 
+  const hasActiveOrder = Boolean(activeOrder);
+
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -164,25 +166,36 @@ export default function HomeScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>Acciones rápidas</Text>
 
-        <View style={styles.grid}>
-          <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BuscarFarmacia')}>
-            <Text style={styles.cardText}>🔍 Buscar farmacia</Text>
+        <View
+          style={[
+            styles.actionsContainer,
+            hasActiveOrder && styles.actionsContainerWithProgress,
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.actionButton, hasActiveOrder && styles.actionButtonCompact]}
+            onPress={() => navigation.navigate('BuscarFarmacia')}
+          >
+            <Text style={styles.actionButtonText}>🔍 Buscar farmacias</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('MisPedidos')}>
-            <Text style={styles.cardText}>🛒 Mis pedidos</Text>
+          <TouchableOpacity
+            style={[styles.actionButton, hasActiveOrder && styles.actionButtonCompact]}
+            onPress={() => navigation.navigate('MisPedidos')}
+          >
+            <Text style={styles.actionButtonText}>📦 Pedidos activos</Text>
             {ordersCount > 0 ? (
-              <Text style={styles.cardBadge}>
+              <Text style={styles.actionBadge}>
                 {ordersCount} {ordersCount === 1 ? 'pedido' : 'pedidos'}
               </Text>
             ) : null}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.actionButton, hasActiveOrder && styles.actionButtonCompact]}
             onPress={() => navigation.navigate('Recordatorios')}
           >
-            <Text style={styles.cardText}>⏰ Recordatorios</Text>
+            <Text style={styles.actionButtonText}>⏰ Recordatorios</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -289,21 +302,38 @@ const createStyles = (theme, insets) => {
       marginBottom: 18,
       color: theme.colors.text,
     },
-    grid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-    card: {
-      flex: 1,
+    actionsContainer: {
+      width: '100%',
+      marginTop: 8,
+    },
+    actionsContainerWithProgress: {
+      marginTop: 0,
+    },
+    actionButton: {
+      width: '100%',
       backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-      padding: 20,
-      marginHorizontal: 4,
+      borderRadius: 20,
+      paddingVertical: 20,
+      paddingHorizontal: 24,
+      marginBottom: 14,
       alignItems: 'center',
       justifyContent: 'center',
       elevation: 3,
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
-    cardText: { fontSize: 15, textAlign: 'center', color: theme.colors.text, fontWeight: '600' },
-    cardBadge: {
+    actionButtonCompact: {
+      borderRadius: 16,
+      paddingVertical: 16,
+      marginBottom: 10,
+    },
+    actionButtonText: {
+      fontSize: 16,
+      textAlign: 'center',
+      color: theme.colors.text,
+      fontWeight: '600',
+    },
+    actionBadge: {
       marginTop: 8,
       fontSize: 12,
       color: theme.colors.accent,
