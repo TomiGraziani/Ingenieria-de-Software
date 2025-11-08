@@ -66,9 +66,22 @@ const launchCameraWithCompat = async () => {
   } catch (error) {
     if (shouldRetryWithLegacyMediaTypes(error)) {
       const legacyMediaTypes = ImagePicker?.MediaTypeOptions?.Images || "Images";
+      const normalizedLegacyMediaTypes = (Array.isArray(legacyMediaTypes)
+        ? legacyMediaTypes
+        : [legacyMediaTypes]
+      ).map((type) => {
+        if (typeof type === "string") {
+          const normalized = type.toLowerCase();
+          if (normalized === "images") return "photo";
+          if (normalized === "videos") return "video";
+          return normalized;
+        }
+        return type;
+      });
+
       return await ImagePicker.launchCameraAsync({
         ...baseOptions,
-        mediaTypes: legacyMediaTypes,
+        mediaTypes: normalizedLegacyMediaTypes,
       });
     }
 
