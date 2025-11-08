@@ -266,6 +266,7 @@ export default function HomeScreen({ navigation }) {
               {ORDER_STEPS.map((step, index) => {
                 const isCompleted = index < currentStepIndex;
                 const isCurrent = index === currentStepIndex;
+                const isReached = index <= currentStepIndex;
                 return (
                   <View key={step.key} style={styles.stepItem}>
                     <View style={styles.stepRow}>
@@ -282,7 +283,7 @@ export default function HomeScreen({ navigation }) {
                             (isCompleted || isCurrent) && styles.stepCircleTextActive,
                           ]}
                         >
-                          {isCompleted ? '✓' : index + 1}
+                          {isReached ? '✓' : index + 1}
                         </Text>
                       </View>
                       {index < ORDER_STEPS.length - 1 && (

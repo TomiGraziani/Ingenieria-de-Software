@@ -13,7 +13,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const formatRecetaNombre = (receta) => {
@@ -24,111 +23,6 @@ const formatRecetaNombre = (receta) => {
     return parts[parts.length - 1];
   }
   return "Receta adjunta";
-};
-
-const resolveCameraMediaType = () => {
-  const mediaTypeOptions = ImagePicker?.MediaTypeOptions;
-
-  if (!mediaTypeOptions) {
-    return undefined;
-  }
-
-  if (typeof mediaTypeOptions === "string") {
-    return mediaTypeOptions;
-  }
-
-  if (Array.isArray(mediaTypeOptions)) {
-    const option = mediaTypeOptions.find((value) => {
-      const textValue = value?.toString?.().toLowerCase?.();
-      return textValue && ["images", "image", "photo"].includes(textValue);
-    });
-
-    return option ?? mediaTypeOptions[0];
-  }
-
-  if (typeof mediaTypeOptions === "object") {
-    const preferredKeys = [
-      "Images",
-      "images",
-      "Image",
-      "image",
-      "Photo",
-      "photo",
-      "Photos",
-      "photos",
-    ];
-
-    for (const key of preferredKeys) {
-      const value = mediaTypeOptions[key];
-      if (!value) continue;
-
-      if (Array.isArray(value)) {
-        const nested = value.find(Boolean);
-        if (nested) {
-          return nested;
-        }
-      } else {
-        return value;
-      }
-    }
-
-    const collected = [];
-    Object.values(mediaTypeOptions).forEach((value) => {
-      if (Array.isArray(value)) {
-        collected.push(...value);
-      } else if (value != null) {
-        collected.push(value);
-      }
-    });
-
-    const matched = collected.find((value) => {
-      const textValue = value?.toString?.().toLowerCase?.();
-      return textValue && ["images", "image", "photo"].some((key) => textValue.includes(key));
-    });
-
-    if (matched) {
-      return matched;
-    }
-
-    if (collected.length > 0) {
-      return collected[0];
-    }
-  }
-
-  return undefined;
-};
-
-const launchCameraWithCompat = async () => {
-  const resolvedMediaType = resolveCameraMediaType();
-  const baseOptions = {
-    quality: 0.7,
-    allowsMultipleSelection: false,
-    ...(resolvedMediaType ? { mediaTypes: resolvedMediaType } : {}),
-  };
-
-  try {
-    return await ImagePicker.launchCameraAsync(baseOptions);
-  } catch (error) {
-    if (
-      error?.message &&
-      typeof error.message === "string" &&
-      error.message.includes("mediaTypes")
-    ) {
-      const fallbackMediaType =
-        ImagePicker?.MediaTypeOptions?.Images ??
-        ImagePicker?.MediaTypeOptions?.Photo ??
-        resolveCameraMediaType();
-
-      const retryOptions =
-        fallbackMediaType != null
-          ? { ...baseOptions, mediaTypes: fallbackMediaType }
-          : baseOptions;
-
-      return await ImagePicker.launchCameraAsync(retryOptions);
-    }
-
-    throw error;
-  }
 };
 
 export default function ProductosFarmaciaScreen({ route }) {
@@ -199,53 +93,11 @@ export default function ProductosFarmaciaScreen({ route }) {
         }
       };
 
-      const abrirCamara = async () => {
-        try {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== "granted") {
-            Alert.alert(
-              "Permiso requerido",
-              "Necesitamos acceso a la cámara para tomar la foto de la receta."
-            );
-            safeResolve(null);
-            return;
-          }
-
-          const result = await launchCameraWithCompat();
-
-          if (result.canceled) {
-            Alert.alert(
-              "Receta obligatoria",
-              "Debés adjuntar una receta para continuar."
-            );
-            safeResolve(null);
-            return;
-          }
-
-          const asset = result.assets?.[0];
-          if (!asset) {
-            safeResolve(null);
-            return;
-          }
-
-          safeResolve({
-            uri: asset.uri,
-            name: asset.fileName || `receta-${Date.now()}.jpg`,
-            mimeType: asset.mimeType || "image/jpeg",
-          });
-        } catch (error) {
-          console.error("Error al tomar foto de la receta:", error);
-          Alert.alert("Error", "No se pudo acceder a la cámara.");
-          safeResolve(null);
-        }
-      };
-
       Alert.alert(
         "Receta necesaria",
         "Este medicamento requiere que adjuntes una receta médica.",
         [
           { text: "Cancelar", style: "cancel", onPress: () => safeResolve(null) },
-          { text: "Tomar foto", onPress: () => abrirCamara() },
           { text: "Adjuntar archivo", onPress: () => abrirPicker() },
         ],
         { cancelable: false }
