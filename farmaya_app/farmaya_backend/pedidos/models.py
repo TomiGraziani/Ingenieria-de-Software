@@ -5,6 +5,8 @@ from productos.models import Producto
 class Pedido(models.Model):
     ESTADOS = [
         ('pendiente', 'Pendiente'),
+        ('aceptado', 'Aceptado'),
+        ('rechazado', 'Rechazado'),
         ('en_preparacion', 'En preparación'),
         ('en_camino', 'En camino'),
         ('entregado', 'Entregado'),
@@ -32,10 +34,36 @@ class Pedido(models.Model):
 
 
 class DetallePedido(models.Model):
+    ESTADOS_RECETA = [
+        ('no_requerida', 'No requiere'),
+        ('pendiente', 'Pendiente'),
+        ('aprobada', 'Aprobada'),
+        ('rechazada', 'Rechazada'),
+    ]
+
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='detalles')
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
     cantidad = models.PositiveIntegerField(default=1)
     precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    requiere_receta = models.BooleanField(default=False)
+    estado_receta = models.CharField(
+        max_length=20,
+        choices=ESTADOS_RECETA,
+        default='no_requerida'
+    )
+    receta_archivo = models.FileField(upload_to='recetas/', blank=True, null=True)
+    observaciones_receta = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.producto.nombre} x{self.cantidad}"
+
+    def save(self, *args, **kwargs):
+        if self.requiere_receta and self.estado_receta == 'no_requerida':
+            self.estado_receta = 'pendiente'
+        if not self.requiere_receta:
+            self.estado_receta = 'no_requerida'
+            if self.receta_archivo:
+                self.receta_archivo.delete(save=False)
+            self.receta_archivo = None
+            self.observaciones_receta = ''
+        super().save(*args, **kwargs)

@@ -1,368 +1,343 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, ActivityIndicator, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import API from '../api/api';
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import API from "../api/api";
+
+const ESTADO_RECETA_LABEL = {
+  pendiente: "Pendiente",
+  aprobada: "Aprobada",
+  rechazada: "Rechazada",
+};
+
+const RECETA_COLOR = {
+  pendiente: "#FF9800",
+  aprobada: "#2E7D32",
+  rechazada: "#C62828",
+};
+
+const formatDate = (value) => {
+  if (!value) return "Fecha no disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return `${date.toLocaleDateString()} · ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
 
 export default function PedidosFarmaciaScreen() {
+  const [farmacia, setFarmacia] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [farmacia, setFarmacia] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const cargarFarmacia = useCallback(async () => {
+  const fetchFarmacia = useCallback(async () => {
     try {
-      const response = await API.get('usuarios/me/');
+      const response = await API.get("usuarios/me/");
       setFarmacia(response.data);
       return response.data;
     } catch (error) {
-      console.error('Error al cargar datos de la farmacia:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudieron cargar los datos de la farmacia.');
+      console.error("Error al cargar datos de la farmacia:", error.response?.data || error);
+      Alert.alert("Error", "No se pudieron cargar los datos de la farmacia.");
       return null;
     }
   }, []);
 
-  const normalizePedido = (item, farmaciaInfo) => {
-    const farmaciaData = farmaciaInfo || farmacia || {};
-    const id = item.id?.toString?.() ?? item.id?.toString() ?? Date.now().toString();
-    const productoNombre =
-      item.producto_nombre ||
-      item.productoNombre ||
-      item.productos?.[0]?.nombre ||
-      item.producto?.nombre ||
-      'Producto';
-
-    const direccionEntrega =
-      item.direccion_entrega || item.direccionEntrega || 'Entrega a coordinar';
-
-    const requiereReceta =
-      item.requiere_receta ??
-      item.requiereReceta ??
-      item.producto?.requiere_receta ??
-      false;
-
-    return {
-      id,
-      usuario_email: item.usuario_email || item.cliente_nombre || 'Cliente',
-      clienteNombre: item.clienteNombre || item.usuario_nombre,
-      producto_nombre: productoNombre,
-      productoNombre,
-      cantidad: item.cantidad || item.detalles?.[0]?.cantidad || 1,
-      direccion_entrega: direccionEntrega,
-      direccionEntrega,
-      receta_url: item.receta_url,
-      requiereReceta,
-      estado: item.estado || 'pendiente',
-      farmacia: farmaciaData.nombre,
-      farmaciaNombre: farmaciaData.nombre,
-      farmaciaDireccion: farmaciaData.direccion,
-      createdAt: item.fecha || item.createdAt || new Date().toISOString(),
-    };
-  };
-
-  const loadStoredOrders = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem('farmaciaOrders');
-      if (stored) {
-        setOrders(JSON.parse(stored));
-      } else {
-        setOrders([]);
+  const fetchOrders = useCallback(
+    async (farmaciaInfo) => {
+      const farmaciaData = farmaciaInfo || farmacia;
+      if (!farmaciaData?.id) {
+        return;
       }
-    } catch (error) {
-      console.error('Error leyendo pedidos locales de farmacia:', error);
-      setOrders([]);
-    }
-  }, []);
 
-  const saveFarmaciaOrders = async (list) => {
-    try {
-      await AsyncStorage.setItem('farmaciaOrders', JSON.stringify(list));
-    } catch (error) {
-      console.error('Error guardando pedidos de farmacia:', error);
-    }
-  };
-
-  const syncClienteOrders = async (list) => {
-    try {
-      const stored = await AsyncStorage.getItem('clienteOrders');
-      if (!stored) return;
-      const clienteOrders = JSON.parse(stored);
-      let changed = false;
-
-      const updated = clienteOrders.map((order) => {
-        const match = list.find((o) => o.id?.toString() === order.id?.toString());
-        if (!match) return order;
-
-        if (['aceptado', 'aprobado'].includes(match.estado) && order.estado === 'creado') {
-          changed = true;
-          return { ...order, estado: 'aceptado' };
-        }
-
-        if (match.estado === 'en_camino' && !['en_camino', 'recibido'].includes(order.estado)) {
-          changed = true;
-          return { ...order, estado: 'en_camino' };
-        }
-
-        if (match.estado === 'entregado' && order.estado !== 'recibido') {
-          changed = true;
-          return { ...order, estado: 'recibido' };
-        }
-
-        return order;
-      });
-
-      if (changed) {
-        await AsyncStorage.setItem('clienteOrders', JSON.stringify(updated));
-      }
-    } catch (error) {
-      console.error('Error sincronizando pedidos del cliente:', error);
-    }
-  };
-
-  const syncRepartidorOrders = async (list, farmaciaInfo) => {
-    try {
-      const stored = await AsyncStorage.getItem('pedidosRepartidor');
-      const repartidorOrders = stored ? JSON.parse(stored) : [];
-      const updated = [...repartidorOrders];
-      const farmaciaData = farmaciaInfo || farmacia || {};
-
-      list.forEach((order) => {
-        const id = order.id?.toString();
-        const index = updated.findIndex((item) => item.id?.toString() === id);
-        const disponible = ['aceptado', 'aprobado'].includes(order.estado);
-
-        if (disponible) {
-          if (index === -1) {
-            updated.push({
-              id,
-              farmacia: order.farmaciaNombre || farmaciaData.nombre,
-              direccionFarmacia: order.farmaciaDireccion || farmaciaData.direccion,
-              direccionCliente: order.direccionEntrega || order.direccion_entrega,
-              productos: order.productoNombre || order.producto_nombre,
-              requiereReceta: order.requiereReceta,
-              estado: 'confirmado',
-              distancia: 3.2,
-              createdAt: order.createdAt,
-            });
-          } else if (updated[index].estado === 'confirmado') {
-            updated[index] = {
-              ...updated[index],
-              farmacia: order.farmaciaNombre || updated[index].farmacia,
-              direccionCliente:
-                order.direccionEntrega || order.direccion_entrega || updated[index].direccionCliente,
-              productos: order.productoNombre || order.producto_nombre || updated[index].productos,
-            };
-          }
-        } else if (index !== -1 && updated[index].estado === 'confirmado') {
-          updated.splice(index, 1);
-        }
-      });
-
-      await AsyncStorage.setItem('pedidosRepartidor', JSON.stringify(updated));
-    } catch (error) {
-      console.error('Error sincronizando pedidos del repartidor:', error);
-    }
-  };
-
-  const cargarPedidos = useCallback(
-    async (farmaciaData = farmacia) => {
       try {
-        await loadStoredOrders();
-
-        const farmaciaInfo = farmaciaData || farmacia;
-        if (!farmaciaInfo?.id) return;
-
-        const token = await AsyncStorage.getItem('accessToken');
-        if (!token) {
-          return;
-        }
-
-        const response = await API.get(`pedidos/farmacia/${farmaciaInfo.id}/`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await API.get(`pedidos/farmacia/${farmaciaData.id}/`, {
+          params: { estado: "pendiente" },
         });
-
-        const data = Array.isArray(response.data)
-          ? response.data.map((item) => normalizePedido(item, farmaciaInfo))
-          : [];
-
-        setOrders(data);
-        await saveFarmaciaOrders(data);
-        await syncClienteOrders(data);
-        await syncRepartidorOrders(data, farmaciaInfo);
+        setOrders(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
-        console.error('Error al cargar pedidos:', error.response?.data || error);
+        console.error("Error al cargar pedidos:", error.response?.data || error);
+        Alert.alert("Error", "No se pudieron cargar los pedidos.");
       }
     },
-    [farmacia, loadStoredOrders]
+    [farmacia]
   );
 
   useEffect(() => {
     const init = async () => {
-      try {
-        const farmaciaData = await cargarFarmacia();
-        await cargarPedidos(farmaciaData);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(true);
+      const farmaciaInfo = await fetchFarmacia();
+      await fetchOrders(farmaciaInfo);
+      setLoading(false);
     };
 
     init();
-  }, [cargarFarmacia, cargarPedidos]);
+  }, [fetchFarmacia, fetchOrders]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (farmacia) {
-        cargarPedidos(farmacia);
-      } else {
-        loadStoredOrders();
-      }
-    }, [farmacia, cargarPedidos, loadStoredOrders])
-  );
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrders();
+    setRefreshing(false);
+  }, [fetchOrders]);
 
-  // 🔹 Descargar y abrir receta
-  const openFile = async (url) => {
+  const actualizarReceta = async (detalleId, nuevoEstado) => {
     try {
-      if (Platform.OS === 'web') {
-        window.open(url, '_blank');
-        return;
-      }
+      await API.patch(`pedidos/detalles/${detalleId}/receta/`, {
+        estado_receta: nuevoEstado,
+      });
 
-      const fileUri = FileSystem.documentDirectory + 'receta_temp.pdf';
-      const { uri } = await FileSystem.downloadAsync(url, fileUri);
-      await Sharing.shareAsync(uri);
-    } catch (error) {
-      console.error('Error al abrir archivo:', error);
-      Alert.alert('Error', 'No se pudo abrir la receta.');
-    }
-  };
+      setOrders((prev) =>
+        prev.map((pedido) => {
+          const detallesActualizados = pedido.detalles.map((detalle) =>
+            detalle.id === detalleId
+              ? { ...detalle, estado_receta: nuevoEstado }
+              : detalle
+          );
 
-  // 🔹 Validar receta → cambiar estado del pedido
-  const validarReceta = async (pedidoId) => {
-    try {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (token) {
-        await API.put(
-          `accounts/pedidos/${pedidoId}/`,
-          { estado: 'aprobado' },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      }
+          const puedeAceptarActualizado = detallesActualizados.every(
+            (detalle) =>
+              !detalle.requiere_receta || detalle.estado_receta === "aprobada"
+          );
 
-      const updatedOrders = orders.map((o) =>
-        o.id?.toString() === pedidoId.toString() ? { ...o, estado: 'aceptado' } : o
+          return {
+            ...pedido,
+            detalles: detallesActualizados,
+            puede_aceptar: puedeAceptarActualizado,
+          };
+        })
       );
-
-      setOrders(updatedOrders);
-      await saveFarmaciaOrders(updatedOrders);
-      await syncClienteOrders(updatedOrders);
-      await syncRepartidorOrders(updatedOrders, farmacia);
-
-      Alert.alert('✅ Receta validada', 'El pedido fue aprobado.');
     } catch (error) {
-      console.error('Error al validar receta:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudo validar la receta.');
+      console.error("Error actualizando receta:", error.response?.data || error);
+      Alert.alert("Error", error.response?.data?.detail || "No se pudo actualizar la receta.");
     }
   };
 
-  // Filtrar para NO mostrar pedidos retirados
-  const visibleOrders = orders.filter(o => o.estado !== 'retirado');
-
-  const estadoLabel = (estado) => {
-    switch (estado) {
-      case 'pendiente':
-        return '⏳ Pendiente';
-      case 'aceptado':
-      case 'aprobado':
-        return '✅ Aceptado';
-      case 'en_camino':
-        return '🚚 En camino';
-      case 'entregado':
-        return '📦 Entregado';
-      default:
-        return estado;
+  const actualizarEstadoPedido = async (pedidoId, nuevoEstado) => {
+    try {
+      await API.patch(`pedidos/${pedidoId}/estado/`, { estado: nuevoEstado });
+      setOrders((prev) => prev.filter((pedido) => pedido.id !== pedidoId));
+      Alert.alert(
+        "Estado actualizado",
+        nuevoEstado === "aceptado"
+          ? "El pedido fue aceptado correctamente."
+          : "El pedido fue rechazado."
+      );
+    } catch (error) {
+      console.error("Error actualizando pedido:", error.response?.data || error);
+      Alert.alert("Error", error.response?.data?.detail || "No se pudo actualizar el pedido.");
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.text}>👤 Cliente: {item.usuario_email || 'Cliente'}</Text>
-      <Text style={styles.text}>💊 Producto: {item.productoNombre || item.producto_nombre}</Text>
-      <Text style={styles.text}>📦 Cantidad: {item.cantidad || 1}</Text>
-      <Text style={styles.text}>🏠 Dirección: {item.direccionEntrega || item.direccion_entrega}</Text>
+  const confirmarAccionReceta = (detalleId, nuevoEstado) => {
+    const mensaje =
+      nuevoEstado === "aprobada"
+        ? "¿Querés aprobar la receta?"
+        : "¿Querés rechazar la receta de este producto?";
 
-      {item.requiereReceta ? (
-        item.receta_url ? (
-          <>
-            <Text style={styles.text}>📜 Receta adjunta</Text>
-            <TouchableOpacity
-              style={styles.smallButton}
-              onPress={() => openFile(item.receta_url)}
-            >
-              <Text style={styles.smallButtonText}>📄 Ver receta</Text>
-            </TouchableOpacity>
-          </>
+    Alert.alert("Confirmar acción", mensaje, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        style: "destructive",
+        onPress: () => actualizarReceta(detalleId, nuevoEstado),
+      },
+    ]);
+  };
+
+  const confirmarAccionPedido = (pedidoId, nuevoEstado) => {
+    const mensaje =
+      nuevoEstado === "aceptado"
+        ? "¿Querés aceptar este pedido? Solo podés hacerlo si todas las recetas están aprobadas."
+        : "¿Querés rechazar este pedido?";
+
+    Alert.alert("Confirmar", mensaje, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        style: "destructive",
+        onPress: () => actualizarEstadoPedido(pedidoId, nuevoEstado),
+      },
+    ]);
+  };
+
+  const verReceta = (url) => {
+    if (!url) {
+      Alert.alert("Receta no disponible", "Este detalle no tiene una receta adjunta.");
+      return;
+    }
+    Linking.openURL(url).catch((error) => {
+      console.error("Error abriendo receta:", error);
+      Alert.alert("Error", "No se pudo abrir la receta adjunta.");
+    });
+  };
+
+  const renderDetalle = (detalle) => (
+    <View key={detalle.id} style={styles.detalleContainer}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.detalleProducto}>{detalle.producto_nombre}</Text>
+        <Text style={styles.detalleInfo}>Cantidad: {detalle.cantidad}</Text>
+        <Text style={styles.detalleInfo}>
+          Precio unitario: ${Number(detalle.precio_unitario || 0)}
+        </Text>
+        {detalle.requiere_receta ? (
+          <Text
+            style={[
+              styles.detalleEstadoReceta,
+              { color: RECETA_COLOR[detalle.estado_receta] || "#374151" },
+            ]}
+          >
+            Estado de receta: {ESTADO_RECETA_LABEL[detalle.estado_receta]}
+          </Text>
         ) : (
-          <Text style={styles.text}>📜 Receta pendiente de validación</Text>
-        )
-      ) : (
-        <Text style={styles.text}>✅ No requiere receta</Text>
-      )}
+          <Text style={styles.detalleEstadoReceta}>✅ No requiere receta</Text>
+        )}
+      </View>
 
-      <Text style={styles.text}>📌 Estado: {estadoLabel(item.estado)}</Text>
+      {detalle.requiere_receta ? (
+        <View style={styles.detalleAcciones}>
+          {detalle.receta_url ? (
+            <TouchableOpacity
+              style={styles.actionSmall}
+              onPress={() => verReceta(detalle.receta_url)}
+            >
+              <Text style={styles.actionSmallText}>Ver receta</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.detalleInfo}>Receta pendiente</Text>
+          )}
 
-      {item.requiereReceta && item.estado === 'pendiente' && (
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => validarReceta(item.id)}
-        >
-          <Text style={styles.buttonText}>Validar Receta</Text>
-        </TouchableOpacity>
-      )}
+          {detalle.estado_receta === "pendiente" ? (
+            <>
+              <TouchableOpacity
+                style={[styles.actionSmall, styles.actionApprove]}
+                onPress={() => confirmarAccionReceta(detalle.id, "aprobada")}
+              >
+                <Text style={styles.actionSmallText}>Aprobar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionSmall, styles.actionReject]}
+                onPress={() => confirmarAccionReceta(detalle.id, "rechazada")}
+              >
+                <Text style={styles.actionSmallText}>Rechazar</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 
-  if (loading)
+  const renderOrder = ({ item }) => {
+    const puedeAceptar = item.puede_aceptar;
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cliente}>👤 Cliente: {item.cliente_nombre || "Cliente"}</Text>
+        <Text style={styles.info}>📧 {item.cliente_email}</Text>
+        <Text style={styles.info}>🏠 Entrega: {item.direccion_entrega}</Text>
+        <Text style={styles.info}>🕒 {formatDate(item.fecha)}</Text>
+
+        <View style={styles.divider} />
+        <Text style={styles.detalleTitulo}>Productos solicitados</Text>
+        {item.detalles.map(renderDetalle)}
+
+        <View style={styles.divider} />
+        <View style={styles.accionesPedido}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => confirmarAccionPedido(item.id, "rechazado")}
+          >
+            <Text style={styles.actionButtonText}>Rechazar pedido</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, puedeAceptar ? styles.acceptButton : styles.disabledButton]}
+            onPress={() => confirmarAccionPedido(item.id, "aceptado")}
+            disabled={!puedeAceptar}
+          >
+            <Text style={styles.actionButtonText}>
+              {puedeAceptar ? "Aceptar pedido" : "Aprobar recetas"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) {
     return <ActivityIndicator size="large" color="#1E88E5" style={{ flex: 1 }} />;
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>📦 Pedidos Recibidos</Text>
+      <Text style={styles.title}>📦 Pedidos pendientes</Text>
       <FlatList
-        data={visibleOrders}
-        keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
-        renderItem={renderItem}
-        ListEmptyComponent={<Text>No hay pedidos nuevos</Text>}
+        data={orders}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderOrder}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        ListEmptyComponent={<Text style={styles.emptyText}>No hay pedidos pendientes.</Text>}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 16 },
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 16, color: "#1E88E5" },
+  emptyText: { textAlign: "center", marginTop: 40, color: "#64748B" },
   card: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9fafb",
     padding: 16,
-    borderRadius: 10,
-    marginBottom: 12,
+    borderRadius: 12,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#e2e8f0",
   },
-  text: { fontSize: 15, marginBottom: 6, color: '#333' },
-  smallButton: {
-    backgroundColor: '#6c8eff',
+  cliente: { fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 4 },
+  info: { fontSize: 14, color: "#374151", marginBottom: 4 },
+  divider: { height: 1, backgroundColor: "#e2e8f0", marginVertical: 12 },
+  detalleTitulo: { fontSize: 15, fontWeight: "600", marginBottom: 8, color: "#1F2937" },
+  detalleContainer: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#edf2f7",
+    flexDirection: "row",
+    gap: 12,
+  },
+  detalleProducto: { fontSize: 14, fontWeight: "600", color: "#111827" },
+  detalleInfo: { fontSize: 13, color: "#4b5563" },
+  detalleEstadoReceta: { fontSize: 13, marginTop: 4 },
+  detalleAcciones: { justifyContent: "center", gap: 8 },
+  actionSmall: {
     paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 6,
-    marginBottom: 6,
-    width: 120,
+    backgroundColor: "#1E88E5",
   },
-  smallButtonText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-  button: {
-    backgroundColor: '#1E88E5',
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 10,
+  actionSmallText: { color: "#fff", fontWeight: "600", fontSize: 12 },
+  actionApprove: { backgroundColor: "#2E7D32" },
+  actionReject: { backgroundColor: "#C62828" },
+  accionesPedido: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
   },
-  buttonText: { color: '#fff', fontWeight: '600', textAlign: 'center' },
+  rejectButton: { backgroundColor: "#ef4444" },
+  acceptButton: { backgroundColor: "#22c55e" },
+  disabledButton: { backgroundColor: "#cbd5f5" },
+  actionButtonText: { color: "#fff", fontWeight: "700" },
 });
