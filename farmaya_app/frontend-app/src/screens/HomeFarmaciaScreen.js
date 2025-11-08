@@ -10,16 +10,17 @@ import {
   Modal,
   TextInput,
   Switch,
-  ScrollView,
   Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import { useTheme } from "../theme/ThemeProvider";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function HomeFarmaciaScreen({ navigation }) {
   const { theme } = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
   const [farmacia, setFarmacia] = useState(null);
   const [productos, setProductos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -311,120 +312,134 @@ export default function HomeFarmaciaScreen({ navigation }) {
     }
   };
 
+  const renderProductItem = ({ item }) => (
+    <View style={styles.card}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.cardNombre}>{item.nombre}</Text>
+        {item.presentacion ? (
+          <Text style={styles.cardDetail}>💊 Presentación: {item.presentacion}</Text>
+        ) : null}
+        <Text style={styles.cardDetail}>💰 ${item.precio}</Text>
+        <Text style={styles.cardDetail}>📦 Stock: {item.stock}</Text>
+        <Text style={styles.cardDetail}>
+          {item.requiere_receta ? "📋 Requiere receta" : "✅ Sin receta"}
+        </Text>
+      </View>
+      <View style={styles.cardActions}>
+        <TouchableOpacity onPress={() => abrirEdicion(item)}>
+          <Text style={styles.btnEditar}>📝</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => eliminarProducto(item.id)}>
+          <Text style={styles.btnEliminar}>🗑</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.headerContent}>
+      <View style={styles.section}>
+        <Text style={styles.title}>🏥 {farmacia?.nombre}</Text>
+        <Text style={styles.info}>📍 {farmacia?.direccion}</Text>
+        <Text style={styles.info}>📞 {farmacia?.telefono}</Text>
+        <Text style={styles.info}>🕓 {farmacia?.horarios}</Text>
+        <Text style={styles.info}>📧 {farmacia?.email}</Text>
+
+        <TouchableOpacity
+          style={styles.btnPrimary}
+          onPress={() => navigation.navigate("EditarPerfilFarmacia")}
+        >
+          <Text style={styles.btnText}>✏️ Editar perfil</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.subtitle}>📦 Pedidos recibidos</Text>
+        {pedidos.length === 0 ? (
+          <Text style={styles.emptyText}>No hay pedidos por ahora</Text>
+        ) : (
+          pedidos.map((p) => (
+            <View key={p.id} style={styles.cardPedido}>
+              <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
+              <Text style={styles.cardDetail}>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
+              <Text style={styles.cardDetail}>Producto: {p.producto_nombre}</Text>
+              <Text style={styles.cardDetail}>Cantidad: {p.cantidad}</Text>
+              <Text style={styles.cardDetail}>Método de pago: {p.metodo_pago}</Text>
+              <Text style={styles.estado}>Estado: {p.estado}</Text>
+
+              {p.receta?.archivo_url && (
+                <TouchableOpacity
+                  style={styles.btnSecundario}
+                  onPress={() => abrirReceta(p.receta.archivo_url)}
+                >
+                  <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={styles.accionesPedido}>
+                <TouchableOpacity
+                  style={[styles.btnPedido, styles.btnAceptar]}
+                  disabled={pedidoProcesando === p.id || p.estado === "aprobado"}
+                  onPress={() => actualizarEstadoPedido(p.id, "aprobado")}
+                >
+                  <Text style={styles.btnPedidoText}>
+                    {pedidoProcesando === p.id && p.estado !== "aprobado"
+                      ? "Procesando..."
+                      : "Aceptar"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnPedido, styles.btnRechazar]}
+                  disabled={pedidoProcesando === p.id || p.estado === "cancelado"}
+                  onPress={() => actualizarEstadoPedido(p.id, "cancelado")}
+                >
+                  <Text style={styles.btnPedidoText}>Rechazar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.subtitle}>🧾 Mis productos</Text>
+        <TouchableOpacity
+          style={[styles.btnPrimary, styles.btnAccent]}
+          onPress={() => navigation.navigate("AgregarProducto")}
+        >
+          <Text style={styles.btnText}>➕ Agregar producto</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderEmptyProducts = () => (
+    <Text style={styles.emptyText}>No hay productos cargados todavía</Text>
+  );
+
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Cargando...</Text>
-      </View>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Cargando...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      {/* 🔹 Datos farmacia */}
-      <Text style={styles.title}>🏥 {farmacia?.nombre}</Text>
-      <Text style={styles.info}>📍 {farmacia?.direccion}</Text>
-      <Text style={styles.info}>📞 {farmacia?.telefono}</Text>
-      <Text style={styles.info}>🕓 {farmacia?.horarios}</Text>
-      <Text style={styles.info}>📧 {farmacia?.email}</Text>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <FlatList
+        data={productos}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderProductItem}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyProducts}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
 
-      <TouchableOpacity
-        style={styles.btnPrimary}
-        onPress={() => navigation.navigate("EditarPerfilFarmacia")}
-      >
-        <Text style={styles.btnText}>✏️ Editar perfil</Text>
-      </TouchableOpacity>
-
-      {/* 🔹 Pedidos recibidos */}
-      <Text style={styles.subtitle}>📦 Pedidos recibidos</Text>
-      {pedidos.length === 0 ? (
-        <Text style={styles.emptyText}>No hay pedidos por ahora</Text>
-      ) : (
-        pedidos.map((p) => (
-          <View key={p.id} style={styles.cardPedido}>
-            <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
-            <Text style={styles.cardDetail}>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
-            <Text style={styles.cardDetail}>Producto: {p.producto_nombre}</Text>
-            <Text style={styles.cardDetail}>Cantidad: {p.cantidad}</Text>
-            <Text style={styles.cardDetail}>Método de pago: {p.metodo_pago}</Text>
-            <Text style={styles.estado}>Estado: {p.estado}</Text>
-
-            {p.receta?.archivo_url && (
-              <TouchableOpacity
-                style={styles.btnSecundario}
-                onPress={() => abrirReceta(p.receta.archivo_url)}
-              >
-                <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.accionesPedido}>
-              <TouchableOpacity
-                style={[styles.btnPedido, styles.btnAceptar]}
-                disabled={pedidoProcesando === p.id || p.estado === "aprobado"}
-                onPress={() => actualizarEstadoPedido(p.id, "aprobado")}
-              >
-                <Text style={styles.btnPedidoText}>
-                  {pedidoProcesando === p.id && p.estado !== "aprobado"
-                    ? "Procesando..."
-                    : "Aceptar"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnPedido, styles.btnRechazar]}
-                disabled={pedidoProcesando === p.id || p.estado === "cancelado"}
-                onPress={() => actualizarEstadoPedido(p.id, "cancelado")}
-              >
-                <Text style={styles.btnPedidoText}>Rechazar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
-      )}
-
-      {/* 🔹 Productos */}
-      <Text style={styles.subtitle}>🧾 Mis productos</Text>
-      <TouchableOpacity
-        style={[styles.btnPrimary, styles.btnAccent]}
-        onPress={() => navigation.navigate("AgregarProducto")}
-      >
-        <Text style={styles.btnText}>➕ Agregar producto</Text>
-      </TouchableOpacity>
-
-      {productos.length === 0 ? (
-        <Text style={styles.emptyText}>No hay productos cargados todavía</Text>
-      ) : (
-        <FlatList
-          data={productos}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardNombre}>{item.nombre}</Text>
-                {item.presentacion ? (
-                  <Text style={styles.cardDetail}>💊 Presentación: {item.presentacion}</Text>
-                ) : null}
-                <Text style={styles.cardDetail}>💰 ${item.precio}</Text>
-                <Text style={styles.cardDetail}>📦 Stock: {item.stock}</Text>
-                <Text style={styles.cardDetail}>
-                  {item.requiere_receta ? "📋 Requiere receta" : "✅ Sin receta"}
-                </Text>
-              </View>
-              <View style={styles.cardActions}>
-                <TouchableOpacity onPress={() => abrirEdicion(item)}>
-                  <Text style={styles.btnEditar}>📝</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => eliminarProducto(item.id)}>
-                  <Text style={styles.btnEliminar}>🗑</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        />
-      )}
-
-      {/* 🔹 Modal de edición */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -467,28 +482,43 @@ export default function HomeFarmaciaScreen({ navigation }) {
               <Switch value={requiereReceta} onValueChange={setRequiereReceta} />
             </View>
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.btnGuardar} onPress={guardarCambios}>
-                  <Text style={styles.buttonText}>Guardar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.btnGuardar, styles.btnCancelar]}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <Text style={styles.buttonTextMuted}>Cancelar</Text>
-                </TouchableOpacity>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.btnGuardar} onPress={guardarCambios}>
+                <Text style={styles.buttonText}>Guardar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnGuardar, styles.btnCancelar]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.buttonTextMuted}>Cancelar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // 🔹 Estilos
-const createStyles = (theme) =>
-  StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background, padding: 20 },
+const createStyles = (theme, insets) => {
+  const bottomInset = insets?.bottom ?? 0;
+
+  return StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.colors.background },
+    listContent: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 20 + bottomInset,
+      backgroundColor: theme.colors.background,
+    },
+    headerContent: {
+      gap: 24,
+      marginBottom: 16,
+    },
+    section: {
+      gap: 12,
+    },
     title: {
       fontSize: 24,
       fontWeight: "bold",
@@ -643,3 +673,4 @@ const createStyles = (theme) =>
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     loadingText: { marginTop: 12, color: theme.colors.textSecondary },
   });
+};

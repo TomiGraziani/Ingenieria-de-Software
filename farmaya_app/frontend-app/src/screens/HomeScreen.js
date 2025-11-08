@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import API from '../api/api';
 import { useTheme } from '../theme/ThemeProvider';
@@ -27,7 +27,8 @@ const normalizeStatus = (status) => (status === 'aprobado' ? 'aceptado' : status
 
 export default function HomeScreen({ navigation }) {
   const { theme } = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
   const [displayName, setDisplayName] = useState('Usuario');
   const [uploading, setUploading] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -148,7 +149,7 @@ export default function HomeScreen({ navigation }) {
 
   if (uploading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Subiendo receta...</Text>
       </SafeAreaView>
@@ -161,7 +162,7 @@ export default function HomeScreen({ navigation }) {
     : 0;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.progressCard}>
           <Text style={styles.progressTitle}>Seguimiento de tu pedido</Text>
@@ -279,8 +280,10 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const createStyles = (theme) =>
-  StyleSheet.create({
+const createStyles = (theme, insets) => {
+  const bottomInset = insets?.bottom ?? 0;
+
+  return StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: theme.colors.background },
     scrollContent: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 24 },
     progressCard: {
@@ -397,7 +400,6 @@ const createStyles = (theme) =>
       fontWeight: '600',
     },
     footer: {
-      height: 68,
       flexDirection: 'row',
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
@@ -405,6 +407,8 @@ const createStyles = (theme) =>
       alignItems: 'center',
       justifyContent: 'space-around',
       paddingHorizontal: 12,
+      paddingTop: 12,
+      paddingBottom: 12 + bottomInset,
     },
     footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     footerText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
@@ -416,3 +420,4 @@ const createStyles = (theme) =>
     },
     loadingText: { marginTop: 12, color: theme.colors.textSecondary, fontSize: 15 },
   });
+};
