@@ -11,8 +11,8 @@ const normalizeStatus = (status) => {
     en_camino: "en_camino",
     recogido: "en_camino",
     retirado: "en_camino",
-    entregado: "recibido",
-    recibido: "recibido",
+    entregado: "entregado",
+    recibido: "entregado",
   };
 
   return map[value] || value;
@@ -124,8 +124,9 @@ export default function PedidoActivoScreen({ route, navigation }) {
       );
 
       await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-      await updateClienteOrderStatus("recibido");
+      await updateClienteOrderStatus("entregado");
       await updateFarmaciaOrderStatus("entregado");
+      setCurrentStatus("entregado");
       navigation.replace("HomeRepartidor");
     } catch (error) {
       console.error("Error al marcar pedido como entregado:", error);

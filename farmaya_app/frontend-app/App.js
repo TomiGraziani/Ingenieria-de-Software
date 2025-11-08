@@ -19,6 +19,7 @@ import ProfileFarmaciaScreen from './src/screens/ProfileFarmaciaScreen';
 import PedidosFarmaciaScreen from './src/screens/PedidosFarmaciaScreen';
 import EditarPerfilFarmaciaScreen from './src/screens/EditarPerfilFarmaciaScreen';
 import AgregarProductoScreen from './src/screens/AgregarProductoScreen';
+import VentasFarmaciaScreen from './src/screens/VentasFarmaciaScreen';
 import PedidoActivoScreen from './src/screens/PedidoActivoScreen';
 import MisPedidosScreen from './src/screens/MisPedidosScreen';
 import RecordatoriosScreen from './src/screens/RecordatoriosScreen';
@@ -85,6 +86,7 @@ export default function App() {
           <Stack.Screen name="PedidosFarmacia" component={PedidosFarmaciaScreen} />
           <Stack.Screen name="EditarPerfilFarmacia" component={EditarPerfilFarmaciaScreen} />
           <Stack.Screen name="AgregarProducto" component={AgregarProductoScreen} />
+          <Stack.Screen name="VentasFarmacia" component={VentasFarmaciaScreen} />
 
           {/* 🔹 Repartidor */}
           <Stack.Screen name="HomeRepartidor" component={HomeRepartidorScreen} />
