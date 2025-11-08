@@ -24,6 +24,56 @@ const formatRecetaNombre = (receta) => {
   return "Receta adjunta";
 };
 
+const resolveCameraMediaTypes = () => {
+  const option = ImagePicker?.MediaTypeOptions?.Images;
+  if (Array.isArray(option)) {
+    return option;
+  }
+  if (typeof option === "string") {
+    const normalized = option.toLowerCase();
+    if (normalized === "images") {
+      return ["photo"];
+    }
+    return [normalized];
+  }
+  return ["photo"];
+};
+
+const shouldRetryWithLegacyMediaTypes = (error) => {
+  if (!error) return false;
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error?.message || error?.toString?.() || "";
+  return typeof rawMessage === "string" && rawMessage.includes("mediaTypes");
+};
+
+const launchCameraWithCompat = async () => {
+  const baseOptions = {
+    quality: 0.7,
+    allowsMultipleSelection: false,
+  };
+
+  const mediaTypes = resolveCameraMediaTypes();
+
+  try {
+    return await ImagePicker.launchCameraAsync({
+      ...baseOptions,
+      mediaTypes,
+    });
+  } catch (error) {
+    if (shouldRetryWithLegacyMediaTypes(error)) {
+      const legacyMediaTypes = ImagePicker?.MediaTypeOptions?.Images || "Images";
+      return await ImagePicker.launchCameraAsync({
+        ...baseOptions,
+        mediaTypes: legacyMediaTypes,
+      });
+    }
+
+    throw error;
+  }
+};
+
 export default function ProductosFarmaciaScreen({ route }) {
   const { farmacia } = route.params;
   const [productos, setProductos] = useState([]);
@@ -104,10 +154,7 @@ export default function ProductosFarmaciaScreen({ route }) {
             return;
           }
 
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.7,
-          });
+          const result = await launchCameraWithCompat();
 
           if (result.canceled) {
             Alert.alert(

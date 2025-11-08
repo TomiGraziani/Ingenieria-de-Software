@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import { useTheme } from "../theme/ThemeProvider";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 export default function HomeFarmaciaScreen({ navigation }) {
   const { theme } = useTheme();
@@ -169,9 +170,17 @@ export default function HomeFarmaciaScreen({ navigation }) {
       await AsyncStorage.setItem("farmaciaOrders", JSON.stringify(pedidosFarmacia));
 
       // Actualizar pedidos del cliente
-      const storedCliente = await AsyncStorage.getItem("clienteOrders");
+      const clienteOrdersKey = await getClienteOrdersStorageKey();
+      const storedCliente = await AsyncStorage.getItem(clienteOrdersKey);
       if (storedCliente) {
-        const pedidosCliente = JSON.parse(storedCliente);
+        const pedidosClienteRaw = JSON.parse(storedCliente);
+        let pedidosCliente = [];
+        if (Array.isArray(pedidosClienteRaw)) {
+          pedidosCliente = pedidosClienteRaw;
+        } else if (pedidosClienteRaw) {
+          pedidosCliente = [];
+          await AsyncStorage.setItem(clienteOrdersKey, JSON.stringify(pedidosCliente));
+        }
         const actualizados = pedidosCliente.map((item) => {
           if (item.id?.toString() !== id) return item;
 
@@ -200,7 +209,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
           };
         });
 
-        await AsyncStorage.setItem("clienteOrders", JSON.stringify(actualizados));
+        await AsyncStorage.setItem(clienteOrdersKey, JSON.stringify(actualizados));
       }
 
       // Actualizar pedidos del repartidor
