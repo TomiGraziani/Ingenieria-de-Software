@@ -43,6 +43,14 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
 
   const solicitarReceta = () =>
     new Promise((resolve) => {
+      let alreadyResolved = false;
+      const safeResolve = (value) => {
+        if (!alreadyResolved) {
+          alreadyResolved = true;
+          resolve(value);
+        }
+      };
+
       const abrirPicker = async () => {
         try {
           const result = await DocumentPicker.getDocumentAsync({
@@ -55,15 +63,63 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
               "Receta obligatoria",
               "Debés adjuntar una receta para continuar con el pedido."
             );
-            resolve(null);
+            safeResolve(null);
             return;
           }
 
-          resolve(result.assets[0]);
+          safeResolve(result.assets[0]);
         } catch (error) {
           console.error("Error al seleccionar receta:", error);
           Alert.alert("Error", "No se pudo seleccionar el archivo de la receta.");
-          resolve(null);
+          safeResolve(null);
+        }
+      };
+
+      const abrirCamara = async () => {
+        try {
+          // eslint-disable-next-line import/no-unresolved
+          const ImagePicker = await import("expo-image-picker");
+          const { requestCameraPermissionsAsync, launchCameraAsync, MediaTypeOptions } = ImagePicker;
+
+          const { status } = await requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permiso requerido",
+              "Necesitamos acceso a la cámara para tomar la foto de la receta."
+            );
+            safeResolve(null);
+            return;
+          }
+
+          const result = await launchCameraAsync({
+            mediaTypes: MediaTypeOptions.Images,
+            quality: 0.7,
+          });
+
+          if (result.canceled) {
+            Alert.alert(
+              "Receta obligatoria",
+              "Debés adjuntar una receta para continuar con el pedido."
+            );
+            safeResolve(null);
+            return;
+          }
+
+          const asset = result.assets?.[0];
+          if (!asset) {
+            safeResolve(null);
+            return;
+          }
+
+          safeResolve({
+            uri: asset.uri,
+            name: asset.fileName || `receta-${Date.now()}.jpg`,
+            mimeType: asset.mimeType || "image/jpeg",
+          });
+        } catch (error) {
+          console.error("Error al tomar foto de la receta:", error);
+          Alert.alert("Error", "No se pudo acceder a la cámara.");
+          safeResolve(null);
         }
       };
 
@@ -71,8 +127,9 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
         "Receta necesaria",
         "Este medicamento requiere que adjuntes una receta médica.",
         [
-          { text: "Cancelar", style: "cancel", onPress: () => resolve(null) },
-          { text: "Adjuntar receta", onPress: () => abrirPicker() },
+          { text: "Cancelar", style: "cancel", onPress: () => safeResolve(null) },
+          { text: "Tomar foto", onPress: () => abrirCamara() },
+          { text: "Adjuntar archivo", onPress: () => abrirPicker() },
         ],
         { cancelable: false }
       );

@@ -5,6 +5,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function PedidoActivoScreen({ route, navigation }) {
   const { pedido } = route.params;
   const [retirado, setRetirado] = useState(pedido.estado === "en camino");
+  const direccionFarmacia =
+    pedido.direccionFarmacia ||
+    pedido.farmaciaDireccion ||
+    pedido.farmacia_direccion ||
+    "Dirección de farmacia";
+  const direccionEntrega =
+    pedido.direccionCliente ||
+    pedido.direccionEntrega ||
+    pedido.direccion_entrega ||
+    "Dirección del cliente";
 
   const updateClienteOrderStatus = async (estado) => {
     try {
@@ -73,10 +83,10 @@ export default function PedidoActivoScreen({ route, navigation }) {
         <Text style={styles.text}>{pedido.farmacia}</Text>
 
         <Text style={styles.label}>Dirección farmacia:</Text>
-        <Text style={styles.text}>{pedido.direccionFarmacia}</Text>
+        <Text style={styles.text}>{direccionFarmacia}</Text>
 
         <Text style={styles.label}>Dirección de entrega:</Text>
-        <Text style={styles.text}>{pedido.direccionCliente || "Dirección del cliente"}</Text>
+        <Text style={styles.text}>{direccionEntrega}</Text>
 
         <Text style={styles.label}>Productos:</Text>
         <Text style={styles.text}>{pedido.productos}</Text>
