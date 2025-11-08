@@ -27,61 +27,41 @@ const formatRecetaNombre = (receta) => {
 };
 
 const resolveCameraMediaTypes = () => {
-  const option = ImagePicker?.MediaTypeOptions?.Images;
-  if (Array.isArray(option)) {
-    return option;
+  const mediaTypeOptions = ImagePicker?.MediaTypeOptions;
+  if (mediaTypeOptions?.Images) {
+    return mediaTypeOptions.Images;
   }
-  if (typeof option === "string") {
-    const normalized = option.toLowerCase();
-    if (normalized === "images") {
-      return ["photo"];
-    }
-    return [normalized];
-  }
-  return ["photo"];
-};
 
-const shouldRetryWithLegacyMediaTypes = (error) => {
-  if (!error) return false;
-  const rawMessage =
-    typeof error === "string"
-      ? error
-      : error?.message || error?.toString?.() || "";
-  return typeof rawMessage === "string" && rawMessage.includes("mediaTypes");
+  if (mediaTypeOptions && typeof mediaTypeOptions === "object") {
+    const imagesKey = Object.keys(mediaTypeOptions).find(
+      (key) => key && key.toLowerCase() === "images"
+    );
+    if (imagesKey) {
+      return mediaTypeOptions[imagesKey];
+    }
+  }
+
+  return "Images";
 };
 
 const launchCameraWithCompat = async () => {
   const baseOptions = {
     quality: 0.7,
     allowsMultipleSelection: false,
+    mediaTypes: resolveCameraMediaTypes(),
   };
 
-  const mediaTypes = resolveCameraMediaTypes();
-
   try {
-    return await ImagePicker.launchCameraAsync({
-      ...baseOptions,
-      mediaTypes,
-    });
+    return await ImagePicker.launchCameraAsync(baseOptions);
   } catch (error) {
-    if (shouldRetryWithLegacyMediaTypes(error)) {
-      const legacyMediaTypes = ImagePicker?.MediaTypeOptions?.Images || "Images";
-      const normalizedLegacyMediaTypes = (Array.isArray(legacyMediaTypes)
-        ? legacyMediaTypes
-        : [legacyMediaTypes]
-      ).map((type) => {
-        if (typeof type === "string") {
-          const normalized = type.toLowerCase();
-          if (normalized === "images") return "photo";
-          if (normalized === "videos") return "video";
-          return normalized;
-        }
-        return type;
-      });
-
+    if (
+      error?.message &&
+      typeof error.message === "string" &&
+      error.message.includes("mediaTypes")
+    ) {
       return await ImagePicker.launchCameraAsync({
         ...baseOptions,
-        mediaTypes: normalizedLegacyMediaTypes,
+        mediaTypes: ImagePicker?.MediaTypeOptions?.Images || "Images",
       });
     }
 

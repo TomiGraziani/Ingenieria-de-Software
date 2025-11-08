@@ -68,10 +68,10 @@ export default function LoginScreen({ navigation }) {
         navigation.replace('Home');
       }
     } catch (error) {
-      console.error('Error durante el login:', error.response?.data || error);
       if (error.response?.status === 401) {
         Alert.alert('Credenciales incorrectas', 'Email o contraseña inválidos.');
       } else {
+        console.error('Error durante el login:', error.response?.data || error);
         Alert.alert('Error', 'No se pudo conectar con el servidor.');
       }
     } finally {
