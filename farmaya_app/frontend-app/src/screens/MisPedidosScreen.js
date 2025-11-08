@@ -10,6 +10,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 
 import API from "../api/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ESTADO_LABEL = {
   pendiente: "Pedido pendiente",
@@ -52,18 +53,57 @@ export default function MisPedidosScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [userLoaded, setUserLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("user");
+        if (!stored) {
+          setUserEmail("");
+          return;
+        }
+
+        const parsed = JSON.parse(stored);
+        const email = (parsed?.email || parsed?.usuario?.email || "").toString().toLowerCase();
+        setUserEmail(email);
+      } catch (error) {
+        console.error("Error cargando datos del usuario para MisPedidos:", error);
+        setUserEmail("");
+      } finally {
+        setUserLoaded(true);
+      }
+    };
+
+    loadUser();
+  }, []);
 
   const fetchOrders = useCallback(async () => {
+    if (!userLoaded) {
+      return;
+    }
+
     try {
       const response = await API.get("pedidos/mis/");
-      setOrders(Array.isArray(response.data) ? response.data : []);
+      const data = Array.isArray(response.data) ? response.data : [];
+
+      const normalizedEmail = userEmail?.toString().toLowerCase();
+      const filtered = normalizedEmail
+        ? data.filter((order) => {
+            const email = (order?.cliente_email || "").toString().toLowerCase();
+            return email === normalizedEmail;
+          })
+        : data;
+
+      setOrders(filtered);
     } catch (error) {
       console.error("Error cargando pedidos del cliente:", error.response?.data || error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [userEmail, userLoaded]);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: true, title: "Mis pedidos" });

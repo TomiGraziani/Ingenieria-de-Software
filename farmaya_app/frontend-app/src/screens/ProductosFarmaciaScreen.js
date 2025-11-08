@@ -10,9 +10,11 @@ import {
   Modal,
   TextInput,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const formatRecetaNombre = (receta) => {
   if (!receta) return null;
@@ -319,6 +321,66 @@ export default function ProductosFarmaciaScreen({ route }) {
     crearPedido(direccionNormalizada);
   };
 
+  const guardarPedidoEnCliente = async (pedidoCreado, direccionSeleccionada) => {
+    try {
+      const storageKey = await getClienteOrdersStorageKey();
+      const stored = await AsyncStorage.getItem(storageKey);
+      let pedidosPrevios = [];
+
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          pedidosPrevios = Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          console.error("Error interpretando pedidos existentes del cliente:", error);
+          pedidosPrevios = [];
+        }
+      }
+
+      const detalles = Array.isArray(pedidoCreado?.detalles) ? pedidoCreado.detalles : [];
+      const resumenProductos = detalles.length
+        ? detalles
+            .map(
+              (detalle) =>
+                `${
+                  detalle.producto_nombre || detalle.productoNombre || detalle.producto || "Producto"
+                } × ${detalle.cantidad ?? 1}`
+            )
+            .join(", ")
+        : carrito
+            .map(
+              (item) => `${item.producto?.nombre || "Producto"} × ${item.cantidad ?? 1}`
+            )
+            .join(", ");
+
+      const nuevoPedido = {
+        id: pedidoCreado?.id,
+        estado: pedidoCreado?.estado || "pendiente",
+        direccionEntrega: pedidoCreado?.direccion_entrega || direccionSeleccionada,
+        direccion_entrega: pedidoCreado?.direccion_entrega || direccionSeleccionada,
+        productoNombre: resumenProductos,
+        producto_nombre: resumenProductos,
+        farmaciaNombre: pedidoCreado?.farmacia_nombre || farmacia?.nombre || "Farmacia",
+        farmacia: pedidoCreado?.farmacia_nombre || farmacia?.nombre || "Farmacia",
+        farmaciaId: farmacia?.id,
+        clienteNombre: pedidoCreado?.cliente_nombre || "",
+        clienteEmail: pedidoCreado?.cliente_email || "",
+        createdAt: pedidoCreado?.fecha || new Date().toISOString(),
+      };
+
+      const pedidosActualizados = [
+        nuevoPedido,
+        ...pedidosPrevios.filter(
+          (pedido) => pedido?.id?.toString() !== (pedidoCreado?.id ?? "").toString()
+        ),
+      ];
+
+      await AsyncStorage.setItem(storageKey, JSON.stringify(pedidosActualizados));
+    } catch (error) {
+      console.error("No se pudo guardar el pedido para el cliente:", error);
+    }
+  };
+
   const crearPedido = async (direccionSeleccionada) => {
     try {
       if (procesandoPedido) {
@@ -349,7 +411,7 @@ export default function ProductosFarmaciaScreen({ route }) {
         }
       });
 
-      await API.post("pedidos/", formData, {
+      const response = await API.post("pedidos/", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -359,6 +421,8 @@ export default function ProductosFarmaciaScreen({ route }) {
         "✅ Pedido creado",
         "Tu pedido fue enviado a la farmacia. Podés seguir el estado desde la sección Mis pedidos."
       );
+
+      await guardarPedidoEnCliente(response.data, direccionSeleccionada);
 
       setCarrito([]);
       setDireccionEntrega("");
