@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -10,10 +9,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import API from '../api/api';
 import { useTheme } from '../theme/ThemeProvider';
 
 const ORDER_STEPS = [
@@ -30,7 +27,6 @@ export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
   const [displayName, setDisplayName] = useState('Usuario');
-  const [uploading, setUploading] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [ordersCount, setOrdersCount] = useState(0);
 
@@ -102,60 +98,6 @@ export default function HomeScreen({ navigation }) {
     }, [loadOrders])
   );
 
-  const handleUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        Alert.alert('Cancelado', 'No seleccionaste ningún archivo.');
-        return;
-      }
-
-      const file = result.assets[0];
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente.');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('imagen', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType,
-      });
-
-      setUploading(true);
-
-      const response = await API.post('accounts/recetas/', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      setUploading(false);
-      Alert.alert('✅ Receta subida', 'Tu receta fue enviada correctamente.');
-      console.log('Respuesta backend:', response.data);
-    } catch (error) {
-      setUploading(false);
-      console.error('Error al subir receta:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudo subir la receta.');
-    }
-  };
-
-  if (uploading) {
-    return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Subiendo receta...</Text>
-      </SafeAreaView>
-    );
-  }
-
   const activeStatus = normalizeStatus(activeOrder?.estado);
   const currentStepIndex = activeStatus
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
@@ -164,72 +106,61 @@ export default function HomeScreen({ navigation }) {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.progressCard}>
-          <Text style={styles.progressTitle}>Seguimiento de tu pedido</Text>
-          {activeOrder ? (
-            <>
-              <Text style={styles.progressSubtitle}>
-                {activeOrder.productoNombre || activeOrder.producto_nombre || 'Pedido'} ·{' '}
-                {activeOrder.farmaciaNombre || activeOrder.farmacia || 'Farmacia'}
-              </Text>
-              <View style={styles.stepsWrapper}>
-                {ORDER_STEPS.map((step, index) => {
-                  const isCompleted = index < currentStepIndex;
-                  const isCurrent = index === currentStepIndex;
-                  return (
-                    <View key={step.key} style={styles.stepItem}>
-                      <View style={styles.stepRow}>
-                        <View
-                          style={[
-                            styles.stepCircle,
-                            isCompleted && styles.stepCircleCompleted,
-                            isCurrent && styles.stepCircleCurrent,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepCircleText,
-                              (isCompleted || isCurrent) && styles.stepCircleTextActive,
-                            ]}
-                          >
-                            {isCompleted ? '✓' : index + 1}
-                          </Text>
-                        </View>
-                        {index < ORDER_STEPS.length - 1 && (
-                          <View
-                            style={[
-                              styles.stepConnector,
-                              index < currentStepIndex
-                                ? styles.stepConnectorActive
-                                : styles.stepConnectorInactive,
-                            ]}
-                          />
-                        )}
-                      </View>
-                      <Text
+        {activeOrder ? (
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Seguimiento de tu pedido</Text>
+            <Text style={styles.progressSubtitle}>
+              {activeOrder.productoNombre || activeOrder.producto_nombre || 'Pedido'} ·{' '}
+              {activeOrder.farmaciaNombre || activeOrder.farmacia || 'Farmacia'}
+            </Text>
+            <View style={styles.stepsWrapper}>
+              {ORDER_STEPS.map((step, index) => {
+                const isCompleted = index < currentStepIndex;
+                const isCurrent = index === currentStepIndex;
+                return (
+                  <View key={step.key} style={styles.stepItem}>
+                    <View style={styles.stepRow}>
+                      <View
                         style={[
-                          styles.stepLabel,
-                          (isCompleted || isCurrent) && styles.stepLabelActive,
+                          styles.stepCircle,
+                          isCompleted && styles.stepCircleCompleted,
+                          isCurrent && styles.stepCircleCurrent,
                         ]}
                       >
-                        {step.label}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.stepCircleText,
+                            (isCompleted || isCurrent) && styles.stepCircleTextActive,
+                          ]}
+                        >
+                          {isCompleted ? '✓' : index + 1}
+                        </Text>
+                      </View>
+                      {index < ORDER_STEPS.length - 1 && (
+                        <View
+                          style={[
+                            styles.stepConnector,
+                            index < currentStepIndex
+                              ? styles.stepConnectorActive
+                              : styles.stepConnectorInactive,
+                          ]}
+                        />
+                      )}
                     </View>
-                  );
-                })}
-              </View>
-            </>
-          ) : (
-            <Text style={styles.progressPlaceholder}>
-              Cuando confirmes una compra vas a poder seguirla desde aquí.
-            </Text>
-          )}
-        </View>
-
-        <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
-          <Text style={styles.uploadIcon}>📤</Text>
-          <Text style={styles.uploadText}>Cargar receta (foto o PDF)</Text>
-        </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.stepLabel,
+                        (isCompleted || isCurrent) && styles.stepLabelActive,
+                      ]}
+                    >
+                      {step.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionTitle}>Acciones rápidas</Text>
 
@@ -307,11 +238,6 @@ const createStyles = (theme, insets) => {
       color: theme.colors.textSecondary,
       fontWeight: '500',
     },
-    progressPlaceholder: {
-      marginTop: 12,
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-    },
     stepsWrapper: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -357,21 +283,6 @@ const createStyles = (theme, insets) => {
     headerTitle: { fontSize: 18, fontWeight: '600', color: theme.colors.text },
     headerProfileButton: { marginRight: 8, padding: 6 },
     profileIcon: { fontSize: 20 },
-    uploadButton: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-      paddingVertical: 18,
-      paddingHorizontal: 20,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 30,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      gap: 12,
-    },
-    uploadIcon: { fontSize: 22 },
-    uploadText: { fontSize: 16, fontWeight: '600', color: theme.colors.accent },
     sectionTitle: {
       fontSize: 18,
       fontWeight: '700',
@@ -412,12 +323,5 @@ const createStyles = (theme, insets) => {
     },
     footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     footerText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.colors.background,
-    },
-    loadingText: { marginTop: 12, color: theme.colors.textSecondary, fontSize: 15 },
   });
 };

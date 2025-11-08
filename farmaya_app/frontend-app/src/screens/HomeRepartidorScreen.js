@@ -6,6 +6,24 @@ import { useFocusEffect } from "@react-navigation/native";
 export default function HomeRepartidorScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
 
+  const getDireccionFarmacia = useCallback(
+    (pedido) =>
+      pedido.direccionFarmacia ||
+      pedido.farmaciaDireccion ||
+      pedido.farmacia_direccion ||
+      "Dirección de farmacia",
+    []
+  );
+
+  const getDireccionCliente = useCallback(
+    (pedido) =>
+      pedido.direccionCliente ||
+      pedido.direccionEntrega ||
+      pedido.direccion_entrega ||
+      "Dirección del cliente",
+    []
+  );
+
   const loadPedidos = useCallback(async () => {
     const stored = await AsyncStorage.getItem("pedidosRepartidor");
 
@@ -91,9 +109,15 @@ export default function HomeRepartidorScreen({ navigation }) {
 
   useEffect(() => {
     if (pedidoActivo) {
-      navigation.replace("PedidoActivo", { pedido: pedidoActivo });
+      navigation.replace("PedidoActivo", {
+        pedido: {
+          ...pedidoActivo,
+          direccionFarmacia: getDireccionFarmacia(pedidoActivo),
+          direccionCliente: getDireccionCliente(pedidoActivo),
+        },
+      });
     }
-  }, [pedidoActivo, navigation]);
+  }, [pedidoActivo, navigation, getDireccionFarmacia, getDireccionCliente]);
 
   if (pedidoActivo) {
     return null;
@@ -104,7 +128,13 @@ export default function HomeRepartidorScreen({ navigation }) {
 
     const updated = pedidos.map(p =>
       p.id === id
-        ? { ...p, estado: "asignado", repartidor }
+        ? {
+            ...p,
+            estado: "asignado",
+            repartidor,
+            direccionFarmacia: getDireccionFarmacia(p),
+            direccionCliente: getDireccionCliente(p),
+          }
         : p
     );
 
@@ -114,7 +144,15 @@ export default function HomeRepartidorScreen({ navigation }) {
     await updateFarmaciaOrderStatus(id, "en_camino");
 
     const pedido = updated.find(p => p.id === id);
-    navigation.replace("PedidoActivo", { pedido });
+    if (pedido) {
+      navigation.replace("PedidoActivo", {
+        pedido: {
+          ...pedido,
+          direccionFarmacia: getDireccionFarmacia(pedido),
+          direccionCliente: getDireccionCliente(pedido),
+        },
+      });
+    }
   };
 
   const rechazarPedido = async (id) => {
@@ -128,8 +166,8 @@ export default function HomeRepartidorScreen({ navigation }) {
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.farmacia}</Text>
-      <Text>📍 {item.direccionFarmacia}</Text>
-      <Text>🏠 {item.direccionCliente}</Text>
+      <Text>📍 {getDireccionFarmacia(item)}</Text>
+      <Text>🏠 {getDireccionCliente(item)}</Text>
       <Text>🛵 Distancia: {item.distancia} km</Text>
       <Text>💊 Pedido: {item.productos}</Text>
 
