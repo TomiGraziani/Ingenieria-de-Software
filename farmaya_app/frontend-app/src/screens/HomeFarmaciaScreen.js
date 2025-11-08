@@ -18,6 +18,18 @@ import { useTheme } from "../theme/ThemeProvider";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
+const RECETA_ESTADO_LABEL = {
+  pendiente: "Pendiente",
+  aprobada: "Aprobada",
+  rechazada: "Rechazada",
+};
+
+const RECETA_ESTADO_COLOR = {
+  pendiente: "#F59E0B",
+  aprobada: "#16A34A",
+  rechazada: "#DC2626",
+};
+
 export default function HomeFarmaciaScreen({ navigation }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -365,6 +377,100 @@ export default function HomeFarmaciaScreen({ navigation }) {
     }
   };
 
+  const actualizarEstadoReceta = async (detalleId, nuevoEstado) => {
+    try {
+      await API.patch(`pedidos/detalles/${detalleId}/receta/`, {
+        estado_receta: nuevoEstado,
+      });
+
+      setPedidos((prev) =>
+        prev.map((pedido) => {
+          if (!Array.isArray(pedido.detalles)) {
+            return pedido;
+          }
+
+          if (!pedido.detalles.some((detalle) => detalle.id === detalleId)) {
+            return pedido;
+          }
+
+          const detallesActualizados = pedido.detalles.map((detalle) =>
+            detalle.id === detalleId
+              ? {
+                  ...detalle,
+                  estadoReceta: nuevoEstado,
+                  estado_receta: nuevoEstado,
+                }
+              : detalle
+          );
+
+          const puedeAceptarActualizado = detallesActualizados.every(
+            (detalle) => !detalle.requiereReceta || detalle.estadoReceta === "aprobada"
+          );
+
+          return {
+            ...pedido,
+            detalles: detallesActualizados,
+            puedeAceptar: puedeAceptarActualizado,
+          };
+        })
+      );
+
+      Alert.alert(
+        "Receta actualizada",
+        nuevoEstado === "aprobada"
+          ? "La receta fue aprobada correctamente."
+          : "La receta fue rechazada."
+      );
+    } catch (error) {
+      console.error("Error al actualizar receta:", error.response?.data || error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.detail || "No se pudo actualizar el estado de la receta."
+      );
+    }
+  };
+
+  const confirmarAccionReceta = (detalleId, nuevoEstado) => {
+    const mensaje =
+      nuevoEstado === "aprobada"
+        ? "¿Querés aprobar la receta?"
+        : "¿Querés rechazar la receta de este producto?";
+
+    Alert.alert("Confirmar acción", mensaje, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        style: "destructive",
+        onPress: () => actualizarEstadoReceta(detalleId, nuevoEstado),
+      },
+    ]);
+  };
+
+  const handleLogout = () => {
+    Alert.alert("Cerrar sesión", "¿Querés cerrar la sesión actual?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Cerrar sesión",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await AsyncStorage.multiRemove([
+              "accessToken",
+              "refreshToken",
+              "user",
+              "farmaciaOrders",
+              "pedidosRepartidor",
+            ]);
+          } catch (storageError) {
+            console.error("Error al limpiar la sesión:", storageError);
+          } finally {
+            navigation.replace("Login");
+          }
+        },
+      },
+    ]);
+  };
+
   const renderProductItem = ({ item }) => (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
@@ -413,7 +519,12 @@ export default function HomeFarmaciaScreen({ navigation }) {
         ) : (
           pedidos.map((p) => {
             const puedeAceptarPedido =
-              typeof p.puedeAceptar === "boolean" ? p.puedeAceptar : true;
+              typeof p.puedeAceptar === "boolean"
+                ? p.puedeAceptar
+                : p.detalles.every((detalle) => {
+                    const estadoReceta = detalle.estadoReceta || "pendiente";
+                    return !detalle.requiereReceta || estadoReceta === "aprobada";
+                  });
 
             return (
               <View key={p.id} style={styles.cardPedido}>
@@ -430,33 +541,70 @@ export default function HomeFarmaciaScreen({ navigation }) {
                   {p.detalles.length === 0 ? (
                     <Text style={styles.cardDetail}>Sin productos registrados.</Text>
                   ) : (
-                    p.detalles.map((detalle) => (
-                      <View key={detalle.id} style={styles.detalleItem}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.detalleProducto}>{detalle.productoNombre}</Text>
-                          <Text style={styles.detalleInfo}>Cantidad: {detalle.cantidad}</Text>
-                          <Text style={styles.detalleInfo}>
-                            Precio unitario: ${detalle.precioUnitario.toFixed(2)}
-                          </Text>
-                          {detalle.requiereReceta ? (
+                    p.detalles.map((detalle) => {
+                      const estadoReceta = detalle.estadoReceta || "pendiente";
+
+                      return (
+                        <View key={detalle.id} style={styles.detalleItem}>
+                          <View style={styles.detalleInfoContainer}>
+                            <Text style={styles.detalleProducto}>{detalle.productoNombre}</Text>
+                            <Text style={styles.detalleInfo}>Cantidad: {detalle.cantidad}</Text>
                             <Text style={styles.detalleInfo}>
-                              Estado de receta: {detalle.estadoReceta}
+                              Precio unitario: ${detalle.precioUnitario.toFixed(2)}
+                            </Text>
+                            {detalle.requiereReceta ? (
+                              <Text
+                                style={[
+                                  styles.detalleEstadoReceta,
+                                  {
+                                    color:
+                                    RECETA_ESTADO_COLOR[estadoReceta] ||
+                                    theme.colors.textSecondary,
+                                  },
+                                ]}
+                              >
+                              Estado de receta: {" "}
+                              {RECETA_ESTADO_LABEL[estadoReceta] || estadoReceta}
                             </Text>
                           ) : (
-                            <Text style={styles.detalleInfo}>No requiere receta</Text>
+                            <Text style={styles.detalleEstadoReceta}>✅ No requiere receta</Text>
                           )}
                         </View>
 
-                        {detalle.requiereReceta && detalle.recetaUrl ? (
-                          <TouchableOpacity
-                            style={styles.btnSecundario}
-                            onPress={() => abrirReceta(detalle.recetaUrl)}
-                          >
-                            <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
-                          </TouchableOpacity>
+                        {detalle.requiereReceta ? (
+                          <View style={styles.detalleAcciones}>
+                            {detalle.recetaUrl ? (
+                              <TouchableOpacity
+                                style={styles.btnReceta}
+                                onPress={() => abrirReceta(detalle.recetaUrl)}
+                              >
+                                <Text style={styles.btnRecetaText}>📄 Ver receta</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <Text style={styles.detalleInfo}>Sin receta adjunta</Text>
+                            )}
+
+                            {estadoReceta === "pendiente" ? (
+                              <>
+                                <TouchableOpacity
+                                  style={[styles.btnReceta, styles.btnRecetaAprobar]}
+                                  onPress={() => confirmarAccionReceta(detalle.id, "aprobada")}
+                                >
+                                  <Text style={styles.btnRecetaText}>✅ Aprobar</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.btnReceta, styles.btnRecetaRechazar]}
+                                  onPress={() => confirmarAccionReceta(detalle.id, "rechazada")}
+                                >
+                                  <Text style={styles.btnRecetaText}>✖ Rechazar</Text>
+                                </TouchableOpacity>
+                              </>
+                            ) : null}
+                          </View>
                         ) : null}
                       </View>
-                    ))
+                      );
+                    })
                   )}
                 </View>
 
@@ -534,6 +682,10 @@ export default function HomeFarmaciaScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       />
 
+      <TouchableOpacity style={styles.logoutFab} onPress={handleLogout}>
+        <Text style={styles.logoutFabText}>🚪 Cerrar sesión</Text>
+      </TouchableOpacity>
+
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -603,7 +755,7 @@ const createStyles = (theme, insets) => {
     listContent: {
       paddingHorizontal: 20,
       paddingTop: 20,
-      paddingBottom: 20 + bottomInset,
+      paddingBottom: 120 + bottomInset,
       backgroundColor: theme.colors.background,
     },
     headerContent: {
@@ -695,6 +847,10 @@ const createStyles = (theme, insets) => {
       borderRadius: 12,
       backgroundColor: theme.colors.card,
     },
+    detalleInfoContainer: {
+      flex: 1,
+      gap: 4,
+    },
     detalleProducto: {
       fontWeight: "600",
       color: theme.colors.text,
@@ -703,17 +859,30 @@ const createStyles = (theme, insets) => {
     detalleInfo: {
       color: theme.colors.textSecondary,
     },
-    btnSecundario: {
-      marginTop: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
+    detalleEstadoReceta: {
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+    },
+    detalleAcciones: {
+      alignItems: "flex-end",
+      gap: 8,
+    },
+    btnReceta: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
       borderRadius: 10,
       backgroundColor: theme.colors.muted,
-      alignSelf: "flex-start",
     },
-    btnSecundarioText: {
-      color: theme.colors.accent,
+    btnRecetaText: {
+      color: theme.colors.text,
       fontWeight: "600",
+      fontSize: 12,
+    },
+    btnRecetaAprobar: {
+      backgroundColor: "#22c55e",
+    },
+    btnRecetaRechazar: {
+      backgroundColor: "#ef4444",
     },
     accionesPedido: {
       flexDirection: "row",
@@ -735,6 +904,24 @@ const createStyles = (theme, insets) => {
     },
     btnPedidoText: {
       color: theme.colors.buttonText,
+      fontWeight: "700",
+    },
+    logoutFab: {
+      position: "absolute",
+      right: 20,
+      bottom: 24 + bottomInset,
+      backgroundColor: "#C62828",
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderRadius: 28,
+      shadowColor: "#000",
+      shadowOpacity: 0.2,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    logoutFabText: {
+      color: "#fff",
       fontWeight: "700",
     },
     modalOverlay: {
