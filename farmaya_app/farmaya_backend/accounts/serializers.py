@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import get_user_model
 from productos.models import Producto  # ✅ import correcto
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -107,7 +108,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Serializer personalizado para devolver info extra en el login."""
 
     def validate(self, attrs):
-        data = super().validate(attrs)
+        try:
+            data = super().validate(attrs)
+        except AuthenticationFailed as exc:  # credenciales inválidas
+            raise AuthenticationFailed('Usuario y/o contraseña incorrectos.') from exc
         data['user'] = UserSerializer(self.user).data
         return data
 
