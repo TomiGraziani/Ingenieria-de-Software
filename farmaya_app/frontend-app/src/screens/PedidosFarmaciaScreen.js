@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import API from "../api/api";
+import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const ESTADO_RECETA_LABEL = {
   pendiente: "Pendiente",
@@ -22,6 +24,79 @@ const RECETA_COLOR = {
   pendiente: "#FF9800",
   aprobada: "#2E7D32",
   rechazada: "#C62828",
+};
+
+const safeParseJSON = (value, fallback = []) => {
+  if (!value) {
+    return Array.isArray(fallback) ? [...fallback] : fallback;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.error("Error interpretando datos locales:", error);
+    return Array.isArray(fallback) ? [...fallback] : fallback;
+  }
+};
+
+const mapEstadoCliente = (estado) => {
+  const value = (estado || "").toString().trim().toLowerCase();
+
+  if (["pendiente", "creado"].includes(value)) {
+    return "creado";
+  }
+
+  if (
+    [
+      "aceptado",
+      "aprobado",
+      "confirmado",
+      "en_preparacion",
+      "preparando",
+      "asignado",
+    ].includes(value)
+  ) {
+    return "aceptado";
+  }
+
+  if (["en camino", "en_camino", "retirado", "recogido", "enviado"].includes(value)) {
+    return "en_camino";
+  }
+
+  if (["entregado", "recibido", "completado"].includes(value)) {
+    return "entregado";
+  }
+
+  if (["cancelado", "rechazado"].includes(value)) {
+    return "rechazado";
+  }
+
+  return value || "creado";
+};
+
+const obtenerResumenProductos = (pedido) => {
+  const detalles = Array.isArray(pedido?.detalles) ? pedido.detalles : [];
+
+  if (!detalles.length) {
+    return (
+      pedido?.productoNombre ||
+      pedido?.producto_nombre ||
+      pedido?.productos ||
+      "Pedido"
+    );
+  }
+
+  return detalles
+    .map((detalle) => {
+      const nombre =
+        detalle.producto_nombre ||
+        detalle.productoNombre ||
+        detalle.producto ||
+        "Producto";
+      const cantidad = detalle.cantidad ?? 1;
+      return `${nombre} × ${cantidad}`;
+    })
+    .join(", ");
 };
 
 const formatDate = (value) => {
@@ -41,6 +116,179 @@ export default function PedidosFarmaciaScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const sincronizarAlmacenamientosLocales = useCallback(
+    async (pedidoActualizado) => {
+      if (!pedidoActualizado) {
+        return;
+      }
+
+      const rawId =
+        pedidoActualizado.id ??
+        pedidoActualizado.ID ??
+        pedidoActualizado.pedido_id ??
+        null;
+      const id = rawId != null ? rawId.toString() : null;
+
+      if (!id) {
+        return;
+      }
+
+      const direccionEntrega =
+        pedidoActualizado.direccion_entrega ||
+        pedidoActualizado.direccionEntrega ||
+        pedidoActualizado.direccion ||
+        "Dirección del cliente";
+      const farmaciaNombre =
+        farmacia?.nombre ||
+        pedidoActualizado.farmacia_nombre ||
+        pedidoActualizado.farmacia ||
+        "Farmacia";
+      const farmaciaDireccion =
+        farmacia?.direccion ||
+        pedidoActualizado.farmacia_direccion ||
+        pedidoActualizado.direccion_farmacia ||
+        "Dirección de farmacia";
+      const resumenProductos = obtenerResumenProductos(pedidoActualizado);
+      const detalles = Array.isArray(pedidoActualizado.detalles)
+        ? pedidoActualizado.detalles
+        : [];
+      const requiereReceta = detalles.some(
+        (detalle) => detalle.requiere_receta || detalle.requiereReceta
+      );
+      const fechaPedido =
+        pedidoActualizado.fecha ||
+        pedidoActualizado.createdAt ||
+        pedidoActualizado.created_at ||
+        new Date().toISOString();
+      const clienteNombre =
+        pedidoActualizado.cliente_nombre || pedidoActualizado.clienteNombre || "";
+      const clienteEmail =
+        pedidoActualizado.cliente_email ||
+        pedidoActualizado.clienteEmail ||
+        pedidoActualizado.usuario_email ||
+        "";
+      const estadoOriginal = pedidoActualizado.estado || "";
+      const estadoCliente = mapEstadoCliente(estadoOriginal);
+
+      try {
+        const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
+        const pedidosFarmacia = safeParseJSON(storedFarmacia, []);
+
+        if (Array.isArray(pedidosFarmacia)) {
+          const indexFarmacia = pedidosFarmacia.findIndex(
+            (pedido) => pedido?.id?.toString() === id
+          );
+
+          const pedidoFarmacia = {
+            id,
+            estado: estadoOriginal,
+            direccionEntrega,
+            direccion_entrega: direccionEntrega,
+            productoNombre: resumenProductos,
+            producto_nombre: resumenProductos,
+            clienteNombre,
+            cliente_email: clienteEmail,
+            farmaciaNombre,
+            farmaciaDireccion,
+            createdAt: fechaPedido,
+          };
+
+          if (indexFarmacia === -1) {
+            pedidosFarmacia.push(pedidoFarmacia);
+          } else {
+            pedidosFarmacia[indexFarmacia] = {
+              ...pedidosFarmacia[indexFarmacia],
+              ...pedidoFarmacia,
+            };
+          }
+
+          await AsyncStorage.setItem(
+            "farmaciaOrders",
+            JSON.stringify(pedidosFarmacia)
+          );
+        }
+      } catch (error) {
+        console.error("Error actualizando pedidos de la farmacia:", error);
+      }
+
+      try {
+        const clienteOrdersKey = await getClienteOrdersStorageKey();
+        const storedCliente = await AsyncStorage.getItem(clienteOrdersKey);
+        const pedidosCliente = safeParseJSON(storedCliente, []);
+
+        if (Array.isArray(pedidosCliente) && pedidosCliente.length > 0) {
+          const actualizados = pedidosCliente.map((pedido) =>
+            pedido?.id?.toString() === id
+              ? {
+                  ...pedido,
+                  estado: estadoCliente,
+                  direccionEntrega,
+                  direccion_entrega: direccionEntrega,
+                  productoNombre: resumenProductos || pedido.productoNombre,
+                  producto_nombre: resumenProductos || pedido.producto_nombre,
+                }
+              : pedido
+          );
+
+          await AsyncStorage.setItem(
+            clienteOrdersKey,
+            JSON.stringify(actualizados)
+          );
+        }
+      } catch (error) {
+        console.error("Error actualizando pedidos del cliente:", error);
+      }
+
+      try {
+        const storedRepartidor = await AsyncStorage.getItem("pedidosRepartidor");
+        const pedidosRepartidor = safeParseJSON(storedRepartidor, []);
+
+        if (Array.isArray(pedidosRepartidor)) {
+          const indexRepartidor = pedidosRepartidor.findIndex(
+            (pedido) => pedido?.id?.toString() === id
+          );
+
+          if (estadoCliente === "aceptado") {
+            const pedidoRepartidor = {
+              id,
+              farmacia: farmaciaNombre,
+              direccionFarmacia:
+                farmaciaDireccion ||
+                pedidosRepartidor[indexRepartidor]?.direccionFarmacia ||
+                "Dirección de farmacia",
+              direccionCliente: direccionEntrega,
+              productos: resumenProductos,
+              requiereReceta,
+              estado: "confirmado",
+              distancia:
+                pedidosRepartidor[indexRepartidor]?.distancia || 3.2,
+              createdAt: fechaPedido,
+            };
+
+            if (indexRepartidor === -1) {
+              pedidosRepartidor.push(pedidoRepartidor);
+            } else {
+              pedidosRepartidor[indexRepartidor] = {
+                ...pedidosRepartidor[indexRepartidor],
+                ...pedidoRepartidor,
+              };
+            }
+          } else if (indexRepartidor !== -1) {
+            pedidosRepartidor.splice(indexRepartidor, 1);
+          }
+
+          await AsyncStorage.setItem(
+            "pedidosRepartidor",
+            JSON.stringify(pedidosRepartidor)
+          );
+        }
+      } catch (error) {
+        console.error("Error actualizando pedidos del repartidor:", error);
+      }
+    },
+    [farmacia]
+  );
 
   const fetchFarmacia = useCallback(async () => {
     try {
@@ -125,7 +373,15 @@ export default function PedidosFarmaciaScreen() {
 
   const actualizarEstadoPedido = async (pedidoId, nuevoEstado) => {
     try {
-      await API.patch(`pedidos/${pedidoId}/estado/`, { estado: nuevoEstado });
+      const response = await API.patch(`pedidos/${pedidoId}/estado/`, {
+        estado: nuevoEstado,
+      });
+      const pedidoActualizado = response?.data || {
+        id: pedidoId,
+        estado: nuevoEstado,
+      };
+
+      await sincronizarAlmacenamientosLocales(pedidoActualizado);
       setOrders((prev) => prev.filter((pedido) => pedido.id !== pedidoId));
       Alert.alert(
         "Estado actualizado",
