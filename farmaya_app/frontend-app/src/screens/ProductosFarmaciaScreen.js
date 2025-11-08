@@ -26,62 +26,84 @@ const formatRecetaNombre = (receta) => {
   return "Receta adjunta";
 };
 
-const resolveCameraMediaTypes = () => {
+const resolveCameraMediaType = () => {
   const mediaTypeOptions = ImagePicker?.MediaTypeOptions;
 
   if (!mediaTypeOptions) {
-    return ["photo"];
+    return undefined;
+  }
+
+  if (typeof mediaTypeOptions === "string") {
+    return mediaTypeOptions;
   }
 
   if (Array.isArray(mediaTypeOptions)) {
-    const option = mediaTypeOptions.find((value) =>
-      typeof value === "string"
-        ? ["images", "image", "photo"].includes(value.toLowerCase())
-        : ["images", "image", "photo"].includes(
-            value?.toString?.().toLowerCase()
-          )
-    );
+    const option = mediaTypeOptions.find((value) => {
+      const textValue = value?.toString?.().toLowerCase?.();
+      return textValue && ["images", "image", "photo"].includes(textValue);
+    });
 
-    return option ? [option] : ["photo"];
+    return option ?? mediaTypeOptions[0];
   }
 
-  const directMatch =
-    mediaTypeOptions.Images ||
-    mediaTypeOptions.images ||
-    mediaTypeOptions.Photo ||
-    mediaTypeOptions.photo;
-  if (directMatch) {
-    return Array.isArray(directMatch) ? directMatch : [directMatch];
+  if (typeof mediaTypeOptions === "object") {
+    const preferredKeys = [
+      "Images",
+      "images",
+      "Image",
+      "image",
+      "Photo",
+      "photo",
+      "Photos",
+      "photos",
+    ];
+
+    for (const key of preferredKeys) {
+      const value = mediaTypeOptions[key];
+      if (!value) continue;
+
+      if (Array.isArray(value)) {
+        const nested = value.find(Boolean);
+        if (nested) {
+          return nested;
+        }
+      } else {
+        return value;
+      }
+    }
+
+    const collected = [];
+    Object.values(mediaTypeOptions).forEach((value) => {
+      if (Array.isArray(value)) {
+        collected.push(...value);
+      } else if (value != null) {
+        collected.push(value);
+      }
+    });
+
+    const matched = collected.find((value) => {
+      const textValue = value?.toString?.().toLowerCase?.();
+      return textValue && ["images", "image", "photo"].some((key) => textValue.includes(key));
+    });
+
+    if (matched) {
+      return matched;
+    }
+
+    if (collected.length > 0) {
+      return collected[0];
+    }
   }
 
-  const dynamicMatchKey = Object.keys(mediaTypeOptions).find(
-    (key) =>
-      key && ["images", "image", "photo"].includes(key.toLowerCase())
-  );
-
-  if (dynamicMatchKey) {
-    const value = mediaTypeOptions[dynamicMatchKey];
-    return Array.isArray(value) ? value : [value];
-  }
-
-  const fallback = ImagePicker?.MediaTypeOptions?.Images;
-  if (fallback) {
-    return [fallback];
-  }
-
-  const photoFallback = ImagePicker?.MediaTypeOptions?.Photo;
-  if (photoFallback) {
-    return [photoFallback];
-  }
-
-  return ["photo"];
+  return undefined;
 };
 
 const launchCameraWithCompat = async () => {
+  const resolvedMediaType = resolveCameraMediaType();
   const baseOptions = {
     quality: 0.7,
     allowsMultipleSelection: false,
-    mediaTypes: resolveCameraMediaTypes(),
+    ...(resolvedMediaType ? { mediaTypes: resolvedMediaType } : {}),
   };
 
   try {
@@ -92,13 +114,17 @@ const launchCameraWithCompat = async () => {
       typeof error.message === "string" &&
       error.message.includes("mediaTypes")
     ) {
-      return await ImagePicker.launchCameraAsync({
-        ...baseOptions,
-        mediaTypes:
-          ImagePicker?.MediaTypeOptions?.Images
-            ? [ImagePicker.MediaTypeOptions.Images]
-            : resolveCameraMediaTypes(),
-      });
+      const fallbackMediaType =
+        ImagePicker?.MediaTypeOptions?.Images ??
+        ImagePicker?.MediaTypeOptions?.Photo ??
+        resolveCameraMediaType();
+
+      const retryOptions =
+        fallbackMediaType != null
+          ? { ...baseOptions, mediaTypes: fallbackMediaType }
+          : baseOptions;
+
+      return await ImagePicker.launchCameraAsync(retryOptions);
     }
 
     throw error;
