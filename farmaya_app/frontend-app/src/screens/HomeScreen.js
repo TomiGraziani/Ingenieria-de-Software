@@ -179,8 +179,8 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.card, styles.cardDisabled]}
-            onPress={() => Alert.alert('Próximamente', 'Esta función aún no está disponible.')}
+            style={styles.card}
+            onPress={() => navigation.navigate('Recordatorios')}
           >
             <Text style={styles.cardText}>⏰ Recordatorios</Text>
           </TouchableOpacity>
@@ -202,7 +202,7 @@ export default function HomeScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.footerButton}
-          onPress={() => Alert.alert('Próximamente', 'Esta función aún no está disponible.')}
+          onPress={() => navigation.navigate('Recordatorios')}
         >
           <Text style={styles.footerText}>Recordatorios</Text>
         </TouchableOpacity>
@@ -302,7 +302,6 @@ const createStyles = (theme, insets) => {
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
-    cardDisabled: { opacity: 0.55 },
     cardText: { fontSize: 15, textAlign: 'center', color: theme.colors.text, fontWeight: '600' },
     cardBadge: {
       marginTop: 8,

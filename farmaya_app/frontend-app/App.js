@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 // 🔹 Screens principales
 import HomeScreen from './src/screens/HomeScreen';
@@ -19,6 +21,7 @@ import EditarPerfilFarmaciaScreen from './src/screens/EditarPerfilFarmaciaScreen
 import AgregarProductoScreen from './src/screens/AgregarProductoScreen';
 import PedidoActivoScreen from './src/screens/PedidoActivoScreen';
 import MisPedidosScreen from './src/screens/MisPedidosScreen';
+import RecordatoriosScreen from './src/screens/RecordatoriosScreen';
 
 // 🔹 Mapa y productos
 import BuscarFarmaciaScreen from './src/screens/BuscarFarmaciaScreen';
@@ -31,7 +34,32 @@ import { ThemeProvider } from './src/theme/ThemeProvider';
 // Crear el Stack de navegación
 const Stack = createNativeStackNavigator();
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export default function App() {
+  useEffect(() => {
+    const configureAndroidChannel = async () => {
+      if (Platform.OS !== 'android') {
+        return;
+      }
+
+      await Notifications.setNotificationChannelAsync('recordatorios', {
+        name: 'Recordatorios',
+        description: 'Recordatorios programados por el usuario',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+      });
+    };
+
+    configureAndroidChannel();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
@@ -68,6 +96,7 @@ export default function App() {
 
           {/* 🔹 Historial de pedidos del cliente */}
           <Stack.Screen name="MisPedidos" component={MisPedidosScreen} />
+          <Stack.Screen name="Recordatorios" component={RecordatoriosScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </ThemeProvider>
