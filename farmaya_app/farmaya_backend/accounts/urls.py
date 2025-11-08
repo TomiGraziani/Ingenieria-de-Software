@@ -7,14 +7,10 @@ from .views import (
     FarmaciaListView,
     CustomTokenObtainPairView,
     ProductoViewSet,
-    PedidoViewSet,
-    RecetaViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'productos', ProductoViewSet, basename='producto')
-router.register(r'pedidos', PedidoViewSet, basename='pedido')
-router.register(r'recetas', RecetaViewSet, basename='receta')
 
 urlpatterns = [
     # ============================================================

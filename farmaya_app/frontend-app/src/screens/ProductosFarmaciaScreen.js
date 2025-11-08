@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,22 +10,37 @@ import {
   Modal,
   TextInput,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
-export default function ProductosFarmaciaScreen({ route, navigation }) {
+const formatRecetaNombre = (receta) => {
+  if (!receta) return null;
+  if (receta.name) return receta.name;
+  if (receta.uri) {
+    const parts = receta.uri.split("/");
+    return parts[parts.length - 1];
+  }
+  return "Receta adjunta";
+};
+
+export default function ProductosFarmaciaScreen({ route }) {
   const { farmacia } = route.params;
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [procesandoPedido, setProcesandoPedido] = useState(false);
+  const [carrito, setCarrito] = useState([]);
+
   const [direccionModalVisible, setDireccionModalVisible] = useState(false);
   const [direccionEntrega, setDireccionEntrega] = useState("");
   const [direccionError, setDireccionError] = useState("");
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
 
-  // 🔹 Obtener productos de esa farmacia
+  const [itemModalVisible, setItemModalVisible] = useState(false);
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [cantidadSeleccionada, setCantidadSeleccionada] = useState("1");
+  const [recetaTemporal, setRecetaTemporal] = useState(null);
+  const [editingItemId, setEditingItemId] = useState(null);
+
   useEffect(() => {
     const fetchProductos = async () => {
       try {
@@ -40,11 +55,12 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     };
 
     fetchProductos();
-  }, []);
+  }, [farmacia.id]);
 
   const solicitarReceta = () =>
     new Promise((resolve) => {
       let alreadyResolved = false;
+
       const safeResolve = (value) => {
         if (!alreadyResolved) {
           alreadyResolved = true;
@@ -62,13 +78,13 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
           if (result.canceled) {
             Alert.alert(
               "Receta obligatoria",
-              "Debés adjuntar una receta para continuar con el pedido."
+              "Debés adjuntar una receta para este producto."
             );
             safeResolve(null);
             return;
           }
 
-          safeResolve(result.assets[0]);
+          safeResolve(result.assets?.[0] || null);
         } catch (error) {
           console.error("Error al seleccionar receta:", error);
           Alert.alert("Error", "No se pudo seleccionar el archivo de la receta.");
@@ -96,7 +112,7 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
           if (result.canceled) {
             Alert.alert(
               "Receta obligatoria",
-              "Debés adjuntar una receta para continuar con el pedido."
+              "Debés adjuntar una receta para continuar."
             );
             safeResolve(null);
             return;
@@ -132,8 +148,131 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
       );
     });
 
-  // 🔹 Crear pedido en el backend
-  const realizarPedido = async (producto, direccionSeleccionada) => {
+  const abrirModalProducto = (producto, editar = false) => {
+    setProductoSeleccionado(producto);
+
+    if (editar) {
+      const existente = carrito.find((item) => item.producto.id === producto.id);
+      setCantidadSeleccionada(existente ? String(existente.cantidad) : "1");
+      setRecetaTemporal(existente?.receta || null);
+      setEditingItemId(producto.id);
+    } else {
+      setCantidadSeleccionada("1");
+      setRecetaTemporal(null);
+      setEditingItemId(null);
+    }
+
+    setItemModalVisible(true);
+  };
+
+  const cerrarModalProducto = () => {
+    setItemModalVisible(false);
+    setProductoSeleccionado(null);
+    setCantidadSeleccionada("1");
+    setRecetaTemporal(null);
+    setEditingItemId(null);
+  };
+
+  const adjuntarRecetaManual = async () => {
+    const receta = await solicitarReceta();
+    if (receta) {
+      setRecetaTemporal(receta);
+    }
+  };
+
+  const confirmarProducto = async () => {
+    if (!productoSeleccionado) {
+      return;
+    }
+
+    const cantidadNum = parseInt(cantidadSeleccionada, 10);
+    if (Number.isNaN(cantidadNum) || cantidadNum <= 0) {
+      Alert.alert("Cantidad inválida", "Ingresá una cantidad mayor a cero.");
+      return;
+    }
+
+    let recetaAdjunta = recetaTemporal;
+    if (productoSeleccionado.requiere_receta && !recetaAdjunta) {
+      recetaAdjunta = await solicitarReceta();
+      if (!recetaAdjunta) {
+        return;
+      }
+    }
+
+    setCarrito((prev) => {
+      if (editingItemId) {
+        return prev.map((item) =>
+          item.producto.id === editingItemId
+            ? { ...item, cantidad: cantidadNum, receta: recetaAdjunta }
+            : item
+        );
+      }
+
+      const existente = prev.find((item) => item.producto.id === productoSeleccionado.id);
+      if (existente) {
+        return prev.map((item) =>
+          item.producto.id === productoSeleccionado.id
+            ? {
+                ...item,
+                cantidad: item.cantidad + cantidadNum,
+                receta: item.receta || recetaAdjunta,
+              }
+            : item
+        );
+      }
+
+      return [
+        ...prev,
+        { producto: productoSeleccionado, cantidad: cantidadNum, receta: recetaAdjunta },
+      ];
+    });
+
+    cerrarModalProducto();
+  };
+
+  const eliminarDelCarrito = (productoId) => {
+    setCarrito((prev) => prev.filter((item) => item.producto.id !== productoId));
+  };
+
+  const totalProductos = useMemo(
+    () => carrito.reduce((acc, item) => acc + item.cantidad, 0),
+    [carrito]
+  );
+
+  const totalEstimado = useMemo(
+    () =>
+      carrito.reduce(
+        (acc, item) => acc + Number(item.producto.precio || 0) * item.cantidad,
+        0
+      ),
+    [carrito]
+  );
+
+  const abrirModalDireccion = () => {
+    if (carrito.length === 0) {
+      Alert.alert("Pedido vacío", "Agregá al menos un producto al pedido.");
+      return;
+    }
+    setDireccionError("");
+    setDireccionModalVisible(true);
+  };
+
+  const cerrarModalDireccion = () => {
+    setDireccionModalVisible(false);
+  };
+
+  const confirmarDireccion = () => {
+    const direccionNormalizada = direccionEntrega.trim();
+    if (!direccionNormalizada) {
+      setDireccionError("Ingresá la dirección de entrega.");
+      return;
+    }
+
+    setDireccionModalVisible(false);
+    crearPedido(direccionNormalizada);
+  };
+
+  const crearPedido = async (direccionSeleccionada) => {
     try {
       if (procesandoPedido) {
         return;
@@ -141,123 +280,41 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
 
       setProcesandoPedido(true);
 
-      const direccionNormalizada = direccionSeleccionada?.trim();
-      if (!direccionNormalizada) {
-        Alert.alert("Dirección requerida", "Ingresá una dirección de entrega válida.");
-        setProcesandoPedido(false);
-        return;
-      }
-
-      let recetaAdjunta = null;
-      if (producto.requiere_receta) {
-        recetaAdjunta = await solicitarReceta();
-        if (!recetaAdjunta) {
-          setProcesandoPedido(false);
-          return;
-        }
-      }
-
-      const token = await AsyncStorage.getItem("accessToken");
-      if (!token) {
-        Alert.alert("Sesión expirada", "Por favor, iniciá sesión nuevamente.");
-        setProcesandoPedido(false);
-        return;
-      }
+      const detalles = carrito.map((item, index) => ({
+        producto: item.producto.id,
+        cantidad: item.cantidad,
+        receta_key: item.producto.requiere_receta ? `receta_${index}` : null,
+      }));
 
       const formData = new FormData();
-      formData.append("producto", String(producto.id));
-      formData.append("cantidad", "1");
-      formData.append("direccion_entrega", direccionNormalizada);
+      formData.append("farmacia_id", String(farmacia.id));
+      formData.append("direccion_entrega", direccionSeleccionada.trim());
       formData.append("metodo_pago", "efectivo");
+      formData.append("detalles", JSON.stringify(detalles));
 
-      if (recetaAdjunta) {
-        formData.append("receta_archivo", {
-          uri: recetaAdjunta.uri,
-          name: recetaAdjunta.name || `receta-${Date.now()}`,
-          type: recetaAdjunta.mimeType || "image/jpeg",
-        });
-      }
+      carrito.forEach((item, index) => {
+        if (item.producto.requiere_receta && item.receta) {
+          formData.append(`receta_${index}`, {
+            uri: item.receta.uri,
+            name: item.receta.name || `receta-${item.producto.id}-${Date.now()}`,
+            type: item.receta.mimeType || "image/jpeg",
+          });
+        }
+      });
 
-      const response = await API.post("pedidos/", formData, {
+      await API.post("pedidos/", formData, {
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
         },
       });
 
       Alert.alert(
         "✅ Pedido creado",
-        `Tu pedido de "${producto.nombre}" fue enviado a ${farmacia.nombre}.`
-      );
-      console.log("📦 Pedido creado:", response.data);
-
-      const payload = response.data || {};
-      const pedidoId = payload.id?.toString?.() ?? Date.now().toString();
-      const requiereReceta = !!producto.requiere_receta;
-      const createdAt = new Date().toISOString();
-      const cantidad = Number(payload.cantidad ?? 1);
-      const direccion = payload.direccion_entrega || direccionNormalizada;
-      const estadoBackend = payload.estado || (requiereReceta ? "pendiente" : "aceptado");
-      const clienteNombre = payload.usuario_nombre || payload.usuario?.nombre || "Cliente";
-      const clienteEmail = payload.usuario_email || payload.usuario?.email || null;
-
-      const nuevoPedidoCliente = {
-        id: pedidoId,
-        productoId: producto.id,
-        productoNombre: producto.nombre,
-        farmaciaId: farmacia.id,
-        farmaciaNombre: farmacia.nombre,
-        farmaciaDireccion: farmacia.direccion || "Dirección no disponible",
-        cantidad,
-        direccionEntrega: direccion,
-        requiereReceta,
-        estado: requiereReceta && estadoBackend === "pendiente" ? "creado" : estadoBackend,
-        createdAt,
-      };
-
-      const storedCliente = await AsyncStorage.getItem("clienteOrders");
-      const pedidosCliente = storedCliente ? JSON.parse(storedCliente) : [];
-      await AsyncStorage.setItem(
-        "clienteOrders",
-        JSON.stringify([...pedidosCliente, nuevoPedidoCliente])
+        "Tu pedido fue enviado a la farmacia. Podés seguir el estado desde la sección Mis pedidos."
       );
 
-      const pedidoFarmacia = {
-        ...nuevoPedidoCliente,
-        estado: estadoBackend,
-        usuario_email: clienteEmail,
-        clienteNombre,
-        direccion_entrega: direccion,
-      };
-      const storedFarmacia = await AsyncStorage.getItem("farmaciaOrders");
-      const pedidosFarmacia = storedFarmacia ? JSON.parse(storedFarmacia) : [];
-      await AsyncStorage.setItem(
-        "farmaciaOrders",
-        JSON.stringify([...pedidosFarmacia, pedidoFarmacia])
-      );
-
-      if (!requiereReceta) {
-        const storedRepartidor = await AsyncStorage.getItem("pedidosRepartidor");
-        const pedidosRepartidor = storedRepartidor ? JSON.parse(storedRepartidor) : [];
-        const nuevoPedidoRepartidor = {
-          id: pedidoId,
-          farmacia: farmacia.nombre,
-          direccionFarmacia: farmacia.direccion || "Dirección de farmacia",
-          direccionCliente: direccion,
-          productos: producto.nombre,
-          requiereReceta,
-          estado: "confirmado",
-          distancia: 2.5,
-          createdAt,
-        };
-        await AsyncStorage.setItem(
-          "pedidosRepartidor",
-          JSON.stringify([...pedidosRepartidor, nuevoPedidoRepartidor])
-        );
-      }
+      setCarrito([]);
       setDireccionEntrega("");
-      setProductoSeleccionado(null);
-      setDireccionError("");
     } catch (error) {
       console.error("❌ Error al crear pedido:", error.response?.data || error);
       Alert.alert(
@@ -269,33 +326,6 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     }
   };
 
-  const abrirModalDireccion = (producto) => {
-    setProductoSeleccionado(producto);
-    setDireccionError("");
-    setDireccionModalVisible(true);
-  };
-
-  const cerrarModalDireccion = () => {
-    setDireccionModalVisible(false);
-    setProductoSeleccionado(null);
-  };
-
-  const confirmarDireccion = () => {
-    const direccionNormalizada = direccionEntrega.trim();
-    if (!direccionNormalizada) {
-      setDireccionError("Ingresá la dirección de entrega.");
-      return;
-    }
-
-    if (!productoSeleccionado) {
-      return;
-    }
-
-    setDireccionModalVisible(false);
-    realizarPedido(productoSeleccionado, direccionNormalizada);
-  };
-
-  // 🔹 Loader
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -305,42 +335,19 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
     );
   }
 
-  // 🔹 Sin productos
-  if (productos.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.emptyText}>
-          Esta farmacia no tiene productos cargados.
-        </Text>
-      </View>
-    );
-  }
-
-  // 🔹 Lista de productos
   return (
-    <>
-      <View style={styles.container}>
-        <Text style={styles.title}>🛍 Productos de {farmacia.nombre}</Text>
-        <FlatList
-          data={productos}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() =>
-                Alert.alert(
-                  "Confirmar pedido",
-                  `¿Querés pedir "${item.nombre}" a ${farmacia.nombre}?`,
-                  [
-                    { text: "Cancelar", style: "cancel" },
-                    {
-                      text: "Continuar",
-                      onPress: () => abrirModalDireccion(item),
-                    },
-                  ]
-                )
-              }
-            >
+    <View style={styles.container}>
+      <Text style={styles.title}>🛍 Productos de {farmacia.nombre}</Text>
+
+      <FlatList
+        data={productos}
+        keyExtractor={(item) => item.id.toString()}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>Esta farmacia no tiene productos cargados.</Text>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.nombre}>{item.nombre}</Text>
               {item.presentacion ? (
                 <Text style={styles.presentacion}>💊 {item.presentacion}</Text>
@@ -353,10 +360,136 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
               {item.requiere_receta && (
                 <Text style={styles.receta}>📜 Requiere receta</Text>
               )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => abrirModalProducto(item)}
+            >
+              <Text style={styles.addButtonText}>Agregar</Text>
             </TouchableOpacity>
-          )}
-        />
-      </View>
+          </View>
+        )}
+      />
+
+      {carrito.length > 0 ? (
+        <View style={styles.cartContainer}>
+          <Text style={styles.cartTitle}>🧺 Pedido actual</Text>
+          {carrito.map((item) => (
+            <View key={item.producto.id} style={styles.cartItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cartItemName}>
+                  {item.producto.nombre} × {item.cantidad}
+                </Text>
+                <Text style={styles.cartItemPrice}>
+                  ${Number(item.producto.precio || 0) * item.cantidad}
+                </Text>
+                {item.producto.requiere_receta ? (
+                  <Text style={styles.cartItemReceta}>
+                    {item.receta
+                      ? `📄 ${formatRecetaNombre(item.receta)}`
+                      : "📄 Receta pendiente"}
+                  </Text>
+                ) : (
+                  <Text style={styles.cartItemReceta}>✅ Sin receta</Text>
+                )}
+              </View>
+
+              <View style={styles.cartActions}>
+                <TouchableOpacity
+                  style={styles.secondaryAction}
+                  onPress={() => abrirModalProducto(item.producto, true)}
+                >
+                  <Text style={styles.secondaryActionText}>Editar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => eliminarDelCarrito(item.producto.id)}
+                >
+                  <Text style={styles.removeButtonText}>Quitar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+
+          <View style={styles.cartSummary}>
+            <Text style={styles.summaryText}>Productos: {totalProductos}</Text>
+            <Text style={styles.summaryText}>
+              Total estimado: ${totalEstimado.toFixed(2)}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={abrirModalDireccion}
+            disabled={procesandoPedido}
+          >
+            <Text style={styles.confirmButtonText}>
+              {procesandoPedido ? "Enviando..." : "Confirmar pedido"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <Modal
+        visible={itemModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarModalProducto}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {productoSeleccionado?.nombre || "Producto"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Ingresá la cantidad que querés agregar a tu pedido.
+            </Text>
+            <TextInput
+              style={[styles.input, styles.quantityInput]}
+              keyboardType="numeric"
+              value={cantidadSeleccionada}
+              onChangeText={setCantidadSeleccionada}
+              placeholder="Cantidad"
+            />
+
+            {productoSeleccionado?.requiere_receta ? (
+              <View style={{ marginTop: 16 }}>
+                <Text style={styles.recetaInfo}>📜 Este producto requiere receta médica.</Text>
+                {recetaTemporal ? (
+                  <Text style={styles.recetaAdjunta}>
+                    Receta adjunta: {formatRecetaNombre(recetaTemporal)}
+                  </Text>
+                ) : (
+                  <Text style={styles.recetaPendiente}>No hay receta adjunta.</Text>
+                )}
+                <TouchableOpacity style={styles.attachButton} onPress={adjuntarRecetaManual}>
+                  <Text style={styles.attachButtonText}>
+                    {recetaTemporal ? "Cambiar receta" : "Adjuntar receta"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={cerrarModalProducto}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={confirmarProducto}
+              >
+                <Text style={styles.modalButtonText}>
+                  {editingItemId ? "Actualizar" : "Agregar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={direccionModalVisible}
@@ -400,37 +533,92 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
                 disabled={procesandoPedido}
               >
                 <Text style={styles.modalButtonText}>
-                  {procesandoPedido ? "Creando..." : "Confirmar pedido"}
+                  {procesandoPedido ? "Enviando..." : "Confirmar"}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 }
 
-// 🎨 Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 16 },
   title: { fontSize: 20, fontWeight: "bold", color: "#1E88E5", marginBottom: 12 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 16 },
   card: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#f8f9fa",
     borderRadius: 10,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#ddd",
+    gap: 12,
   },
   nombre: { fontSize: 16, fontWeight: "bold", color: "#333" },
   presentacion: { fontSize: 13, color: "#555", marginTop: 2 },
   descripcion: { fontSize: 13, color: "#555", marginVertical: 4 },
   precio: { fontSize: 14, fontWeight: "600", color: "#2E7D32" },
   stock: { fontSize: 12, color: "#333", marginTop: 4 },
-  receta: { fontSize: 12, color: "red" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 16 },
+  receta: { fontSize: 12, color: "#D84315", marginTop: 2 },
+  addButton: {
+    backgroundColor: "#1E88E5",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addButtonText: { color: "#fff", fontWeight: "600" },
+  cartContainer: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#eef4ff",
+    borderWidth: 1,
+    borderColor: "#bbd0ff",
+  },
+  cartTitle: { fontSize: 18, fontWeight: "700", color: "#1E88E5", marginBottom: 12 },
+  cartItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 12,
+  },
+  cartItemName: { fontSize: 15, fontWeight: "600", color: "#1F2937" },
+  cartItemPrice: { fontSize: 14, color: "#2E7D32", marginTop: 2 },
+  cartItemReceta: { fontSize: 12, color: "#374151", marginTop: 2 },
+  cartActions: { flexDirection: "row", gap: 8 },
+  secondaryAction: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: "#E3F2FD",
+  },
+  secondaryActionText: { color: "#1E88E5", fontWeight: "600" },
+  removeButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: "#FFCDD2",
+  },
+  removeButtonText: { color: "#C62828", fontWeight: "600" },
+  cartSummary: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  summaryText: { fontSize: 14, fontWeight: "600", color: "#1F2937" },
+  confirmButton: {
+    backgroundColor: "#1E88E5",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  confirmButtonText: { color: "#fff", fontWeight: "700", textAlign: "center" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -463,6 +651,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#263238",
   },
+  quantityInput: {
+    textAlign: "center",
+  },
   inputError: {
     borderColor: "#e53935",
   },
@@ -471,6 +662,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 6,
   },
+  recetaInfo: { fontSize: 13, color: "#1F2937" },
+  recetaAdjunta: { fontSize: 13, color: "#2E7D32", marginTop: 4 },
+  recetaPendiente: { fontSize: 13, color: "#D84315", marginTop: 4 },
+  attachButton: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    backgroundColor: "#1E88E5",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  attachButtonText: { color: "#fff", fontWeight: "600" },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "flex-end",
