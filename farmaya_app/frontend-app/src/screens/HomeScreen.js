@@ -20,7 +20,41 @@ const ORDER_STEPS = [
   { key: 'recibido', label: 'Recibido' },
 ];
 
-const normalizeStatus = (status) => (status === 'aprobado' ? 'aceptado' : status);
+const normalizeStatus = (status) => {
+  const value = (status || '').toString().trim().toLowerCase();
+  const map = {
+    pendiente: 'creado',
+    creado: 'creado',
+    aceptado: 'aceptado',
+    aprobado: 'aceptado',
+    confirmado: 'aceptado',
+    en_preparacion: 'aceptado',
+    preparando: 'aceptado',
+    asignado: 'aceptado',
+    'en camino': 'en_camino',
+    en_camino: 'en_camino',
+    recogido: 'en_camino',
+    retirado: 'en_camino',
+    enviado: 'en_camino',
+    entregado: 'recibido',
+    recibido: 'recibido',
+    completado: 'recibido',
+  };
+
+  return map[value] || value || 'creado';
+};
+
+const isActiveStatus = (status) => {
+  const value = (status || '').toString().toLowerCase();
+  return ![
+    'recibido',
+    'entregado',
+    'cancelado',
+    'rechazado',
+    'completado',
+    'finalizado',
+  ].includes(value);
+};
 
 export default function HomeScreen({ navigation }) {
   const { theme } = useTheme();
@@ -54,7 +88,7 @@ export default function HomeScreen({ navigation }) {
         );
 
       setOrdersCount(sorted.length);
-      const running = sorted.find((order) => normalizeStatus(order.estado) !== 'recibido');
+      const running = sorted.find((order) => isActiveStatus(order.estado));
       setActiveOrder(running || null);
     } catch (error) {
       console.error('Error cargando pedidos del cliente:', error);

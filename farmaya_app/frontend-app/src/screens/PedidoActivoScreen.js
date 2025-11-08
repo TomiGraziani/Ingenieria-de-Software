@@ -1,10 +1,26 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const normalizeStatus = (status) => {
+  const value = (status || "").toString().trim().toLowerCase();
+  const map = {
+    "en camino": "en_camino",
+    en_camino: "en_camino",
+    recogido: "en_camino",
+    retirado: "en_camino",
+    entregado: "recibido",
+    recibido: "recibido",
+  };
+
+  return map[value] || value;
+};
+
 export default function PedidoActivoScreen({ route, navigation }) {
   const { pedido } = route.params;
-  const [retirado, setRetirado] = useState(pedido.estado === "en camino");
+  const pedidoId = useMemo(() => pedido?.id?.toString() ?? "", [pedido?.id]);
+  const [currentStatus, setCurrentStatus] = useState(() => normalizeStatus(pedido?.estado));
+  const retirado = currentStatus === "en_camino";
   const direccionFarmacia =
     pedido.direccionFarmacia ||
     pedido.farmaciaDireccion ||
@@ -16,13 +32,38 @@ export default function PedidoActivoScreen({ route, navigation }) {
     pedido.direccion_entrega ||
     "Dirección del cliente";
 
+  useEffect(() => {
+    const syncEstado = async () => {
+      if (!pedidoId) return;
+
+      try {
+        const stored = await AsyncStorage.getItem("pedidosRepartidor");
+        if (!stored) return;
+
+        const pedidos = JSON.parse(stored);
+        const pedidosArray = Array.isArray(pedidos) ? pedidos : [];
+        const pedidoGuardado = pedidosArray.find(
+          (item) => item.id?.toString() === pedidoId
+        );
+
+        if (pedidoGuardado?.estado != null) {
+          setCurrentStatus(normalizeStatus(pedidoGuardado.estado));
+        }
+      } catch (error) {
+        console.error("Error sincronizando estado del pedido activo:", error);
+      }
+    };
+
+    syncEstado();
+  }, [pedidoId]);
+
   const updateClienteOrderStatus = async (estado) => {
     try {
       const stored = await AsyncStorage.getItem("clienteOrders");
       if (!stored) return;
       const orders = JSON.parse(stored);
       const updated = orders.map((order) =>
-        order.id?.toString() === pedido.id?.toString()
+        order.id?.toString() === pedidoId
           ? { ...order, estado }
           : order
       );
@@ -38,7 +79,7 @@ export default function PedidoActivoScreen({ route, navigation }) {
       if (!stored) return;
       const orders = JSON.parse(stored);
       const updated = orders.map((order) =>
-        order.id?.toString() === pedido.id?.toString()
+        order.id?.toString() === pedidoId
           ? { ...order, estado }
           : order
       );
@@ -49,29 +90,41 @@ export default function PedidoActivoScreen({ route, navigation }) {
   };
 
   const marcarRetirado = async () => {
-    const stored = await AsyncStorage.getItem("pedidosRepartidor");
-    const updated = JSON.parse(stored).map((p) =>
-      p.id === pedido.id ? { ...p, estado: "retirado" } : p
-    );
+    try {
+      const stored = await AsyncStorage.getItem("pedidosRepartidor");
+      const pedidos = stored ? JSON.parse(stored) : [];
+      const pedidosArray = Array.isArray(pedidos) ? pedidos : [];
+      const updated = pedidosArray.map((p) =>
+        p.id?.toString() === pedidoId ? { ...p, estado: "en_camino" } : p
+      );
 
-    setRetirado(true);
-    await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-    await updateClienteOrderStatus("en_camino");
-    await updateFarmaciaOrderStatus("en_camino");
+      setCurrentStatus("en_camino");
+      await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+      await updateClienteOrderStatus("en_camino");
+      await updateFarmaciaOrderStatus("en_camino");
 
-    Alert.alert("📦 Pedido retirado de farmacia", "Procede a entregar.");
+      Alert.alert("📦 Pedido retirado de farmacia", "Procede a entregar.");
+    } catch (error) {
+      console.error("Error al marcar pedido como retirado:", error);
+    }
   };
 
   const marcarEntregado = async () => {
-    const stored = await AsyncStorage.getItem("pedidosRepartidor");
-    const updated = JSON.parse(stored).map((p) =>
-      p.id === pedido.id ? { ...p, estado: "entregado" } : p
-    );
+    try {
+      const stored = await AsyncStorage.getItem("pedidosRepartidor");
+      const pedidos = stored ? JSON.parse(stored) : [];
+      const pedidosArray = Array.isArray(pedidos) ? pedidos : [];
+      const updated = pedidosArray.map((p) =>
+        p.id?.toString() === pedidoId ? { ...p, estado: "entregado" } : p
+      );
 
-    await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
-    await updateClienteOrderStatus("recibido");
-    await updateFarmaciaOrderStatus("entregado");
-    navigation.replace("HomeRepartidor");
+      await AsyncStorage.setItem("pedidosRepartidor", JSON.stringify(updated));
+      await updateClienteOrderStatus("recibido");
+      await updateFarmaciaOrderStatus("entregado");
+      navigation.replace("HomeRepartidor");
+    } catch (error) {
+      console.error("Error al marcar pedido como entregado:", error);
+    }
   };
 
   return (
