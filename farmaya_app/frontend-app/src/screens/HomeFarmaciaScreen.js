@@ -59,14 +59,65 @@ export default function HomeFarmaciaScreen({ navigation }) {
     }
   };
 
-  // 🔹 Cargar pedidos recibidos
+  const normalizarPedido = (pedido) => {
+    if (!pedido) return null;
+
+    const detalles = Array.isArray(pedido.detalles)
+      ? pedido.detalles.map((detalle) => ({
+          id: detalle.id,
+          productoId: detalle.producto,
+          productoNombre: detalle.producto_nombre,
+          cantidad: detalle.cantidad,
+          precioUnitario: Number(detalle.precio_unitario || 0),
+          requiereReceta: detalle.requiere_receta,
+          estadoReceta: detalle.estado_receta,
+          recetaUrl: detalle.receta_url,
+          observacionesReceta: detalle.observaciones_receta,
+        }))
+      : [];
+
+    return {
+      id: pedido.id,
+      clienteNombre: pedido.cliente_nombre,
+      clienteEmail: pedido.cliente_email,
+      direccionEntrega: pedido.direccion_entrega,
+      metodoPago: pedido.metodo_pago,
+      fecha: pedido.fecha,
+      estado: pedido.estado,
+      puedeAceptar: pedido.puede_aceptar,
+      farmaciaNombre: pedido.farmacia_nombre,
+      detalles,
+    };
+  };
+
   const cargarPedidos = async () => {
     try {
       const response = await API.get("pedidos/");
-      setPedidos(response.data);
+      const pedidosNormalizados = Array.isArray(response.data)
+        ? response.data
+            .map(normalizarPedido)
+            .filter((pedido) => pedido !== null)
+        : [];
+      setPedidos(pedidosNormalizados);
     } catch (error) {
       console.error("❌ Error al cargar pedidos:", error.response?.data || error);
     }
+  };
+
+  const formatearFecha = (valor) => {
+    if (!valor) return "Fecha no disponible";
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) {
+      return valor;
+    }
+    return fecha.toLocaleString();
+  };
+
+  const obtenerResumenProductos = (pedido) => {
+    if (!pedido?.detalles?.length) return "Sin productos";
+    return pedido.detalles
+      .map((detalle) => `${detalle.productoNombre || detalle.producto_nombre} x${detalle.cantidad}`)
+      .join(", ");
   };
 
   const sincronizarAlmacenamientos = async (pedido) => {
@@ -76,19 +127,14 @@ export default function HomeFarmaciaScreen({ navigation }) {
       if (!id) return;
 
       const direccionEntrega =
-        pedido.direccion_entrega || pedido.direccionEntrega || "Entrega a coordinar";
-      const productoNombre =
-        pedido.producto_nombre ||
-        pedido.productoNombre ||
-        pedido.producto?.nombre ||
-        "Producto";
-      const requiereReceta =
-        pedido.requiere_receta ?? pedido.requiereReceta ?? pedido.producto?.requiere_receta ?? false;
-      const clienteNombre = pedido.usuario_nombre || pedido.clienteNombre || "";
+        pedido.direccionEntrega || pedido.direccion_entrega || "Entrega a coordinar";
+      const resumenProductos = obtenerResumenProductos(pedido);
+      const requiereReceta = pedido.detalles?.some((detalle) => detalle.requiereReceta ?? detalle.requiere_receta) ?? false;
+      const clienteNombre = pedido.clienteNombre || pedido.cliente_nombre || "";
       const clienteEmail =
-        pedido.usuario_email || pedido.usuario?.email || pedido.email || "";
+        pedido.clienteEmail || pedido.cliente_email || pedido.usuario_email || "";
       const fechaPedido = pedido.fecha || pedido.createdAt || new Date().toISOString();
-      const farmaciaNombre = farmacia?.nombre || pedido.farmacia_nombre || "Farmacia";
+      const farmaciaNombre = farmacia?.nombre || pedido.farmaciaNombre || pedido.farmacia_nombre || "Farmacia";
       const farmaciaDireccion = farmacia?.direccion || pedido.farmaciaDireccion || "Dirección no disponible";
 
       // Actualizar pedidos de la farmacia
@@ -97,9 +143,9 @@ export default function HomeFarmaciaScreen({ navigation }) {
       const indexFarmacia = pedidosFarmacia.findIndex((item) => item.id?.toString() === id);
       const pedidoFarmacia = {
         id,
-        productoNombre,
-        producto_nombre: productoNombre,
-        cantidad: pedido.cantidad ?? 1,
+        productoNombre: resumenProductos,
+        producto_nombre: resumenProductos,
+        cantidad: pedido.detalles?.reduce((total, detalle) => total + (detalle.cantidad || 0), 0) || 1,
         direccionEntrega,
         direccion_entrega: direccionEntrega,
         requiereReceta,
@@ -130,26 +176,27 @@ export default function HomeFarmaciaScreen({ navigation }) {
           if (item.id?.toString() !== id) return item;
 
           let estadoCliente = item.estado;
-          if (["aprobado", "aceptado"].includes(pedido.estado)) {
+          const estadoPedido = pedido.estado;
+          if (["aceptado"].includes(estadoPedido)) {
             estadoCliente = "aceptado";
-          } else if (["enviado", "en_camino"].includes(pedido.estado)) {
+          } else if (["en_camino"].includes(estadoPedido)) {
             estadoCliente = "en_camino";
-          } else if (pedido.estado === "entregado") {
+          } else if (estadoPedido === "entregado") {
             estadoCliente = "recibido";
-          } else if (pedido.estado === "cancelado") {
+          } else if (estadoPedido === "cancelado" || estadoPedido === "rechazado") {
             estadoCliente = "cancelado";
-          } else if (pedido.estado === "pendiente" && requiereReceta) {
+          } else if (estadoPedido === "pendiente" && requiereReceta) {
             estadoCliente = "creado";
-          } else if (pedido.estado) {
-            estadoCliente = pedido.estado;
+          } else if (estadoPedido) {
+            estadoCliente = estadoPedido;
           }
 
           return {
             ...item,
             estado: estadoCliente,
             direccionEntrega,
-            productoNombre,
-            producto_nombre: productoNombre,
+            productoNombre: resumenProductos,
+            producto_nombre: resumenProductos,
           };
         });
 
@@ -161,14 +208,14 @@ export default function HomeFarmaciaScreen({ navigation }) {
       const pedidosRepartidor = storedRepartidor ? JSON.parse(storedRepartidor) : [];
       const indexRepartidor = pedidosRepartidor.findIndex((item) => item.id?.toString() === id);
 
-      if (["aprobado", "aceptado"].includes(pedido.estado)) {
+      if (["aceptado"].includes(pedido.estado)) {
         const pedidoRepartidor = {
           id,
           farmacia: farmaciaNombre,
           direccionFarmacia:
             farmaciaDireccion || pedidosRepartidor[indexRepartidor]?.direccionFarmacia || "Dirección de farmacia",
           direccionCliente: direccionEntrega,
-          productos: productoNombre,
+          productos: resumenProductos,
           requiereReceta,
           estado: "confirmado",
           distancia: pedidosRepartidor[indexRepartidor]?.distancia || 3.2,
@@ -279,24 +326,21 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const actualizarEstadoPedido = async (id, nuevoEstado) => {
     try {
       setPedidoProcesando(id);
-      const response = await API.patch(`pedidos/${id}/`, { estado: nuevoEstado });
-      let pedidoActualizado = response.data;
+      const estadoApi = nuevoEstado === "aprobado" ? "aceptado" : nuevoEstado;
+      const response = await API.patch(`pedidos/${id}/estado/`, { estado: estadoApi });
+      const pedidoActualizado = normalizarPedido(response.data);
 
-      if (!pedidoActualizado || Object.keys(pedidoActualizado).length === 0) {
-        const detalle = await API.get(`pedidos/${id}/`);
-        pedidoActualizado = detalle.data;
+      if (!pedidoActualizado) {
+        throw new Error("No se pudo obtener la información del pedido actualizado.");
       }
 
-      const pedidoPrevio = pedidos.find((pedido) => pedido.id === id) || {};
-      const pedidoCombinado = { ...pedidoPrevio, ...pedidoActualizado, id };
-
       setPedidos((prev) =>
-        prev.map((pedido) => (pedido.id === id ? pedidoCombinado : pedido))
+        prev.map((pedido) => (pedido.id === id ? pedidoActualizado : pedido))
       );
 
-      await sincronizarAlmacenamientos(pedidoCombinado);
+      await sincronizarAlmacenamientos(pedidoActualizado);
 
-      if (nuevoEstado === "aprobado") {
+      if (estadoApi === "aceptado") {
         Alert.alert("Pedido aceptado", "Confirmaste la preparación del pedido.");
       } else {
         Alert.alert("Pedido rechazado", "Notificamos al cliente sobre el rechazo.");
@@ -358,46 +402,87 @@ export default function HomeFarmaciaScreen({ navigation }) {
         {pedidos.length === 0 ? (
           <Text style={styles.emptyText}>No hay pedidos por ahora</Text>
         ) : (
-          pedidos.map((p) => (
-            <View key={p.id} style={styles.cardPedido}>
-              <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
-              <Text style={styles.cardDetail}>Cliente: {p.usuario_nombre || "Anónimo"}</Text>
-              <Text style={styles.cardDetail}>Producto: {p.producto_nombre}</Text>
-              <Text style={styles.cardDetail}>Cantidad: {p.cantidad}</Text>
-              <Text style={styles.cardDetail}>Método de pago: {p.metodo_pago}</Text>
-              <Text style={styles.estado}>Estado: {p.estado}</Text>
+          pedidos.map((p) => {
+            const puedeAceptarPedido =
+              typeof p.puedeAceptar === "boolean" ? p.puedeAceptar : true;
 
-              {p.receta?.archivo_url && (
-                <TouchableOpacity
-                  style={styles.btnSecundario}
-                  onPress={() => abrirReceta(p.receta.archivo_url)}
-                >
-                  <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
-                </TouchableOpacity>
-              )}
+            return (
+              <View key={p.id} style={styles.cardPedido}>
+                <Text style={styles.cardTitle}>Pedido #{p.id}</Text>
+                <Text style={styles.cardDetail}>Cliente: {p.clienteNombre || "Anónimo"}</Text>
+                <Text style={styles.cardDetail}>Email: {p.clienteEmail || "Sin email"}</Text>
+                <Text style={styles.cardDetail}>Dirección: {p.direccionEntrega}</Text>
+                <Text style={styles.cardDetail}>Método de pago: {p.metodoPago}</Text>
+                <Text style={styles.cardDetail}>Fecha: {formatearFecha(p.fecha)}</Text>
+                <Text style={styles.estado}>Estado: {p.estado}</Text>
 
-              <View style={styles.accionesPedido}>
-                <TouchableOpacity
-                  style={[styles.btnPedido, styles.btnAceptar]}
-                  disabled={pedidoProcesando === p.id || p.estado === "aprobado"}
-                  onPress={() => actualizarEstadoPedido(p.id, "aprobado")}
-                >
-                  <Text style={styles.btnPedidoText}>
-                    {pedidoProcesando === p.id && p.estado !== "aprobado"
-                      ? "Procesando..."
-                      : "Aceptar"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.btnPedido, styles.btnRechazar]}
-                  disabled={pedidoProcesando === p.id || p.estado === "cancelado"}
-                  onPress={() => actualizarEstadoPedido(p.id, "cancelado")}
-                >
-                  <Text style={styles.btnPedidoText}>Rechazar</Text>
-                </TouchableOpacity>
+                <View style={styles.detallesContainer}>
+                  <Text style={styles.detallesTitulo}>Productos solicitados</Text>
+                  {p.detalles.length === 0 ? (
+                    <Text style={styles.cardDetail}>Sin productos registrados.</Text>
+                  ) : (
+                    p.detalles.map((detalle) => (
+                      <View key={detalle.id} style={styles.detalleItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.detalleProducto}>{detalle.productoNombre}</Text>
+                          <Text style={styles.detalleInfo}>Cantidad: {detalle.cantidad}</Text>
+                          <Text style={styles.detalleInfo}>
+                            Precio unitario: ${detalle.precioUnitario.toFixed(2)}
+                          </Text>
+                          {detalle.requiereReceta ? (
+                            <Text style={styles.detalleInfo}>
+                              Estado de receta: {detalle.estadoReceta}
+                            </Text>
+                          ) : (
+                            <Text style={styles.detalleInfo}>No requiere receta</Text>
+                          )}
+                        </View>
+
+                        {detalle.requiereReceta && detalle.recetaUrl ? (
+                          <TouchableOpacity
+                            style={styles.btnSecundario}
+                            onPress={() => abrirReceta(detalle.recetaUrl)}
+                          >
+                            <Text style={styles.btnSecundarioText}>📄 Ver receta</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ))
+                  )}
+                </View>
+
+                <View style={styles.accionesPedido}>
+                  <TouchableOpacity
+                    style={[styles.btnPedido, styles.btnAceptar]}
+                    disabled={
+                      pedidoProcesando === p.id ||
+                      p.estado === "aceptado" ||
+                      p.estado === "en_camino" ||
+                      !puedeAceptarPedido
+                    }
+                    onPress={() => actualizarEstadoPedido(p.id, "aprobado")}
+                  >
+                    <Text style={styles.btnPedidoText}>
+                      {pedidoProcesando === p.id && p.estado !== "aceptado"
+                        ? "Procesando..."
+                        : puedeAceptarPedido
+                        ? "Aceptar"
+                        : "Aprobar recetas"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btnPedido, styles.btnRechazar]}
+                    disabled={
+                      pedidoProcesando === p.id || ["cancelado", "rechazado"].includes(p.estado)
+                    }
+                    onPress={() => actualizarEstadoPedido(p.id, "cancelado")}
+                  >
+                    <Text style={styles.btnPedidoText}>Rechazar</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
 
@@ -579,6 +664,36 @@ const createStyles = (theme, insets) => {
     btnEditar: { fontSize: 22, marginHorizontal: 6, color: theme.colors.accent },
     btnEliminar: { fontSize: 22, marginHorizontal: 6, color: "#D97767" },
     cardDetail: { color: theme.colors.textSecondary, marginBottom: 4 },
+    detallesContainer: {
+      marginTop: 12,
+      gap: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    detallesTitulo: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.colors.text,
+    },
+    detalleItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      backgroundColor: theme.colors.card,
+    },
+    detalleProducto: {
+      fontWeight: "600",
+      color: theme.colors.text,
+      marginBottom: 4,
+    },
+    detalleInfo: {
+      color: theme.colors.textSecondary,
+    },
     btnSecundario: {
       marginTop: 10,
       paddingVertical: 8,
