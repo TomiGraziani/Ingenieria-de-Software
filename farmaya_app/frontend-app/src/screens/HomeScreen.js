@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme/ThemeProvider';
+import API from '../api/api';
 import getClienteOrdersStorageKey from '../utils/storageKeys';
 
 const ORDER_STEPS = [
@@ -20,6 +21,55 @@ const ORDER_STEPS = [
   { key: 'en_camino', label: 'En camino' },
   { key: 'entregado', label: 'Entregado' },
 ];
+
+const normalizeOrderFromApi = (order) => {
+  if (!order || typeof order !== 'object') {
+    return null;
+  }
+
+  const detalles = Array.isArray(order.detalles) ? order.detalles : [];
+  const productosResumen = detalles.length
+    ? detalles
+        .map((detalle) => {
+          const nombreProducto =
+            detalle.producto_nombre ||
+            detalle.productoNombre ||
+            detalle.producto ||
+            'Producto';
+          const cantidad = detalle.cantidad ?? 1;
+          return `${nombreProducto} × ${cantidad}`;
+        })
+        .join(', ')
+    : order.productoNombre || order.producto_nombre || '';
+
+  const rawId =
+    order.id ??
+    order.ID ??
+    order.uuid ??
+    order.numero ??
+    order.codigo ??
+    null;
+
+  const id = rawId != null ? rawId.toString() : order.createdAt || order.fecha || null;
+
+  const direccionEntrega =
+    order.direccion_entrega || order.direccionEntrega || order.direccion || '';
+
+  return {
+    ...order,
+    id,
+    estado: order.estado || 'pendiente',
+    direccionEntrega,
+    direccion_entrega: order.direccion_entrega || order.direccionEntrega || '',
+    productoNombre:
+      productosResumen || order.productoNombre || order.producto_nombre || 'Pedido',
+    producto_nombre:
+      productosResumen || order.producto_nombre || order.productoNombre || 'Pedido',
+    farmaciaNombre: order.farmacia_nombre || order.farmaciaNombre || order.farmacia || '',
+    farmacia: order.farmacia_nombre || order.farmacia || order.farmaciaNombre || '',
+    createdAt: order.fecha || order.createdAt || order.created_at || new Date().toISOString(),
+  };
+};
 
 const normalizeStatus = (status) => {
   const value = (status || '').toString().trim().toLowerCase();
@@ -68,21 +118,49 @@ export default function HomeScreen({ navigation }) {
   const loadOrders = useCallback(async () => {
     try {
       const storageKey = await getClienteOrdersStorageKey();
-      const stored = await AsyncStorage.getItem(storageKey);
-      if (!stored) {
+      let orders = null;
+
+      try {
+        const response = await API.get('pedidos/mis/');
+        const data = Array.isArray(response.data) ? response.data : [];
+        const normalized = data
+          .map(normalizeOrderFromApi)
+          .filter((order) => order && order.id != null);
+
+        await AsyncStorage.setItem(storageKey, JSON.stringify(normalized));
+        orders = normalized;
+      } catch (apiError) {
+        console.error(
+          'Error sincronizando pedidos desde la API:',
+          apiError?.response?.data || apiError
+        );
+      }
+
+      if (!orders) {
+        const stored = await AsyncStorage.getItem(storageKey);
+        if (!stored) {
+          setActiveOrder(null);
+          setOrdersCount(0);
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            orders = parsed;
+          }
+        } catch (parseError) {
+          console.error('Error interpretando pedidos almacenados del cliente:', parseError);
+        }
+      }
+
+      if (!orders || !Array.isArray(orders)) {
         setActiveOrder(null);
         setOrdersCount(0);
         return;
       }
 
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) {
-        setActiveOrder(null);
-        setOrdersCount(0);
-        return;
-      }
-
-      const sorted = parsed
+      const sorted = orders
         .slice()
         .sort(
           (a, b) =>
