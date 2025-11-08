@@ -65,6 +65,23 @@ class CrearPedidoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get(self, request):
+        if getattr(request.user, 'tipo_usuario', None) != 'farmacia':
+            return Response(
+                {'detail': 'Solo las farmacias pueden consultar esta información.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        pedidos = (
+            Pedido.objects.select_related('cliente', 'farmacia')
+            .prefetch_related('detalles__producto')
+            .filter(farmacia=request.user)
+            .order_by('-fecha')
+        )
+
+        serializer = PedidoSerializer(pedidos, many=True, context={'request': request})
+        return Response(serializer.data)
+
     def post(self, request):
         cliente = request.user
         data = request.data
