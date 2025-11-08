@@ -1,11 +1,15 @@
-import { Image, StyleSheet, Text, TouchableOpacity, View, SafeAreaView } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 
 export default function WelcomeScreen({ navigation }) {
   const { theme, isDarkMode, toggleTheme } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <View style={styles.logoContainer}>
         <Image
           source={require('../assets/logo.png')} // ✅ ruta corregida

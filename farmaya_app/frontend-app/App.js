@@ -25,6 +25,7 @@ import BuscarFarmaciaScreen from './src/screens/BuscarFarmaciaScreen';
 import ProductosFarmaciaScreen from './src/screens/ProductosFarmaciaScreen';
 
 // 🔹 Tema global
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 
 // Crear el Stack de navegación
@@ -32,9 +33,10 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <NavigationContainer>
-        <Stack.Navigator
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <NavigationContainer>
+          <Stack.Navigator
           initialRouteName="Welcome"
           screenOptions={{
             headerShown: false, // Oculta el header por defecto
@@ -66,9 +68,10 @@ export default function App() {
 
           {/* 🔹 Historial de pedidos del cliente */}
           <Stack.Screen name="MisPedidos" component={MisPedidosScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </ThemeProvider>
-    
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ThemeProvider>
+    </SafeAreaProvider>
+
   );
 }
