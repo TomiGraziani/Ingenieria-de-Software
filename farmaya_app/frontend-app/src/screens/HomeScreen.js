@@ -18,7 +18,7 @@ const ORDER_STEPS = [
   { key: 'creado', label: 'Pedido creado' },
   { key: 'aceptado', label: 'Pedido aceptado' },
   { key: 'en_camino', label: 'En camino' },
-  { key: 'recibido', label: 'Recibido' },
+  { key: 'entregado', label: 'Entregado' },
 ];
 
 const normalizeStatus = (status) => {
@@ -37,9 +37,9 @@ const normalizeStatus = (status) => {
     recogido: 'en_camino',
     retirado: 'en_camino',
     enviado: 'en_camino',
-    entregado: 'recibido',
-    recibido: 'recibido',
-    completado: 'recibido',
+    entregado: 'entregado',
+    recibido: 'entregado',
+    completado: 'entregado',
   };
 
   return map[value] || value || 'creado';
@@ -48,7 +48,6 @@ const normalizeStatus = (status) => {
 const isActiveStatus = (status) => {
   const value = (status || '').toString().toLowerCase();
   return ![
-    'recibido',
     'entregado',
     'cancelado',
     'rechazado',

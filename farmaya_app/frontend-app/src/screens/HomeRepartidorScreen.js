@@ -12,6 +12,8 @@ const normalizeRepartidorStatus = (estado) => {
     en_camino: "en_camino",
     recogido: "en_camino",
     retirado: "en_camino",
+    entregado: "entregado",
+    recibido: "entregado",
   };
 
   return map[value] || value;

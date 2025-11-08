@@ -13,6 +13,7 @@ import API from "../api/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ESTADO_LABEL = {
+  creado: "Pedido creado",
   pendiente: "Pedido pendiente",
   aceptado: "Pedido aceptado",
   rechazado: "Pedido rechazado",
@@ -24,6 +25,9 @@ const ESTADO_LABEL = {
 
 const estadoColor = (estado) => {
   switch (estado) {
+    case "creado":
+    case "pendiente":
+      return "#1E88E5";
     case "aceptado":
     case "en_preparacion":
       return "#2E7D32";

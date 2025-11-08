@@ -111,7 +111,17 @@ export default function HomeFarmaciaScreen({ navigation }) {
             .map(normalizarPedido)
             .filter((pedido) => pedido !== null)
         : [];
-      setPedidos(pedidosNormalizados);
+
+      await Promise.all(
+        pedidosNormalizados.map((pedido) => sincronizarAlmacenamientos(pedido))
+      );
+
+      const pendientes = pedidosNormalizados.filter((pedido) => {
+        const estado = (pedido?.estado || "").toString().toLowerCase();
+        return estado === "pendiente";
+      });
+
+      setPedidos(pendientes);
     } catch (error) {
       console.error("❌ Error al cargar pedidos:", error.response?.data || error);
     }
@@ -197,17 +207,26 @@ export default function HomeFarmaciaScreen({ navigation }) {
           if (item.id?.toString() !== id) return item;
 
           let estadoCliente = item.estado;
-          const estadoPedido = pedido.estado;
-          if (["aceptado"].includes(estadoPedido)) {
-            estadoCliente = "aceptado";
-          } else if (["en_camino"].includes(estadoPedido)) {
-            estadoCliente = "en_camino";
-          } else if (estadoPedido === "entregado") {
-            estadoCliente = "recibido";
-          } else if (estadoPedido === "cancelado" || estadoPedido === "rechazado") {
-            estadoCliente = "cancelado";
-          } else if (estadoPedido === "pendiente" && requiereReceta) {
+          const estadoPedido = (pedido.estado || "").toString().toLowerCase();
+
+          if (estadoPedido === "pendiente") {
             estadoCliente = "creado";
+          } else if (
+            ["aceptado", "aprobado", "confirmado", "en_preparacion"].includes(
+              estadoPedido
+            )
+          ) {
+            estadoCliente = "aceptado";
+          } else if (
+            ["en_camino", "retirado", "recogido"].includes(estadoPedido)
+          ) {
+            estadoCliente = "en_camino";
+          } else if (
+            ["entregado", "recibido", "completado"].includes(estadoPedido)
+          ) {
+            estadoCliente = "entregado";
+          } else if (["cancelado", "rechazado"].includes(estadoPedido)) {
+            estadoCliente = "cancelado";
           } else if (estadoPedido) {
             estadoCliente = estadoPedido;
           }
@@ -355,11 +374,23 @@ export default function HomeFarmaciaScreen({ navigation }) {
         throw new Error("No se pudo obtener la información del pedido actualizado.");
       }
 
-      setPedidos((prev) =>
-        prev.map((pedido) => (pedido.id === id ? pedidoActualizado : pedido))
-      );
-
       await sincronizarAlmacenamientos(pedidoActualizado);
+
+      setPedidos((prev) => {
+        const actualizados = prev.map((pedido) =>
+          pedido.id === id ? { ...pedido, ...pedidoActualizado } : pedido
+        );
+
+        const estadoNormalizado = (pedidoActualizado.estado || "")
+          .toString()
+          .toLowerCase();
+
+        if (["aceptado", "cancelado", "rechazado"].includes(estadoNormalizado)) {
+          return actualizados.filter((pedido) => pedido.id !== id);
+        }
+
+        return actualizados;
+      });
 
       if (estadoApi === "aceptado") {
         Alert.alert("Pedido aceptado", "Confirmaste la preparación del pedido.");
@@ -471,6 +502,16 @@ export default function HomeFarmaciaScreen({ navigation }) {
     ]);
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const renderProductItem = ({ item }) => (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
@@ -509,6 +550,13 @@ export default function HomeFarmaciaScreen({ navigation }) {
           onPress={() => navigation.navigate("EditarPerfilFarmacia")}
         >
           <Text style={styles.btnText}>✏️ Editar perfil</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.btnPrimary, styles.btnVentas]}
+          onPress={() => navigation.navigate("VentasFarmacia")}
+        >
+          <Text style={styles.btnText}>🛒 Ventas</Text>
         </TouchableOpacity>
       </View>
 
@@ -792,6 +840,9 @@ const createStyles = (theme, insets) => {
       elevation: 3,
     },
     btnText: { color: theme.colors.buttonText, fontWeight: "bold", fontSize: 16 },
+    btnVentas: {
+      backgroundColor: theme.colors.accent,
+    },
     btnAccent: { backgroundColor: theme.colors.accent },
     emptyText: { textAlign: "center", marginTop: 12, color: theme.colors.textSecondary },
     card: {
@@ -923,6 +974,12 @@ const createStyles = (theme, insets) => {
     logoutFabText: {
       color: "#fff",
       fontWeight: "700",
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: theme.colors.background,
     },
     modalOverlay: {
       flex: 1,
