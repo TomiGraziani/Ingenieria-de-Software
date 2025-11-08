@@ -28,20 +28,53 @@ const formatRecetaNombre = (receta) => {
 
 const resolveCameraMediaTypes = () => {
   const mediaTypeOptions = ImagePicker?.MediaTypeOptions;
-  if (mediaTypeOptions?.Images) {
-    return mediaTypeOptions.Images;
+
+  if (!mediaTypeOptions) {
+    return ["photo"];
   }
 
-  if (mediaTypeOptions && typeof mediaTypeOptions === "object") {
-    const imagesKey = Object.keys(mediaTypeOptions).find(
-      (key) => key && key.toLowerCase() === "images"
+  if (Array.isArray(mediaTypeOptions)) {
+    const option = mediaTypeOptions.find((value) =>
+      typeof value === "string"
+        ? ["images", "image", "photo"].includes(value.toLowerCase())
+        : ["images", "image", "photo"].includes(
+            value?.toString?.().toLowerCase()
+          )
     );
-    if (imagesKey) {
-      return mediaTypeOptions[imagesKey];
-    }
+
+    return option ? [option] : ["photo"];
   }
 
-  return "Images";
+  const directMatch =
+    mediaTypeOptions.Images ||
+    mediaTypeOptions.images ||
+    mediaTypeOptions.Photo ||
+    mediaTypeOptions.photo;
+  if (directMatch) {
+    return Array.isArray(directMatch) ? directMatch : [directMatch];
+  }
+
+  const dynamicMatchKey = Object.keys(mediaTypeOptions).find(
+    (key) =>
+      key && ["images", "image", "photo"].includes(key.toLowerCase())
+  );
+
+  if (dynamicMatchKey) {
+    const value = mediaTypeOptions[dynamicMatchKey];
+    return Array.isArray(value) ? value : [value];
+  }
+
+  const fallback = ImagePicker?.MediaTypeOptions?.Images;
+  if (fallback) {
+    return [fallback];
+  }
+
+  const photoFallback = ImagePicker?.MediaTypeOptions?.Photo;
+  if (photoFallback) {
+    return [photoFallback];
+  }
+
+  return ["photo"];
 };
 
 const launchCameraWithCompat = async () => {
@@ -61,7 +94,10 @@ const launchCameraWithCompat = async () => {
     ) {
       return await ImagePicker.launchCameraAsync({
         ...baseOptions,
-        mediaTypes: ImagePicker?.MediaTypeOptions?.Images || "Images",
+        mediaTypes:
+          ImagePicker?.MediaTypeOptions?.Images
+            ? [ImagePicker.MediaTypeOptions.Images]
+            : resolveCameraMediaTypes(),
       });
     }
 

@@ -159,6 +159,14 @@ export default function HomeScreen({ navigation }) {
     }, [loadOrders])
   );
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadOrders();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [loadOrders]);
+
   const activeStatus = normalizeStatus(activeOrder?.estado);
   const currentStepIndex = activeStatus
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
