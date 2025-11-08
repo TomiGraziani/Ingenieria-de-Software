@@ -13,6 +13,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 
 export default function ProductosFarmaciaScreen({ route, navigation }) {
   const { farmacia } = route.params;
@@ -77,11 +78,7 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
 
       const abrirCamara = async () => {
         try {
-          // eslint-disable-next-line import/no-unresolved
-          const ImagePicker = await import("expo-image-picker");
-          const { requestCameraPermissionsAsync, launchCameraAsync, MediaTypeOptions } = ImagePicker;
-
-          const { status } = await requestCameraPermissionsAsync();
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== "granted") {
             Alert.alert(
               "Permiso requerido",
@@ -91,8 +88,8 @@ export default function ProductosFarmaciaScreen({ route, navigation }) {
             return;
           }
 
-          const result = await launchCameraAsync({
-            mediaTypes: MediaTypeOptions.Images,
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
             quality: 0.7,
           });
 
