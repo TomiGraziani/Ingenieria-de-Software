@@ -17,16 +17,25 @@ import getClienteOrdersStorageKey from '../utils/storageKeys';
 
 const ORDER_STEPS = [
   { key: 'creado', label: 'Pedido creado' },
-  { key: 'aceptado', label: 'Pedido aceptado' },
   { key: 'en_camino', label: 'En camino' },
   { key: 'entregado', label: 'Entregado' },
 ];
 
 const STATUS_RANK = {
   creado: 0,
-  aceptado: 1,
-  en_camino: 2,
-  entregado: 3,
+  aceptado: 0,
+  aprobado: 0,
+  confirmado: 0,
+  en_preparacion: 0,
+  preparando: 0,
+  asignado: 0,
+  en_camino: 1,
+  retirado: 1,
+  recogido: 1,
+  enviado: 1,
+  entregado: 2,
+  recibido: 2,
+  completado: 2,
 };
 
 const CANCELED_STATES = new Set(['cancelado', 'rechazado']);
@@ -85,12 +94,12 @@ const normalizeStatus = (status) => {
   const map = {
     pendiente: 'creado',
     creado: 'creado',
-    aceptado: 'aceptado',
-    aprobado: 'aceptado',
-    confirmado: 'aceptado',
-    en_preparacion: 'aceptado',
-    preparando: 'aceptado',
-    asignado: 'aceptado',
+    aceptado: 'creado',
+    aprobado: 'creado',
+    confirmado: 'creado',
+    en_preparacion: 'creado',
+    preparando: 'creado',
+    asignado: 'creado',
     'en camino': 'en_camino',
     en_camino: 'en_camino',
     recogido: 'en_camino',
@@ -302,12 +311,13 @@ export default function HomeScreen({ navigation }) {
     return () => clearInterval(interval);
   }, [loadOrders]);
 
-  const activeStatus = normalizeStatus(activeOrder?.estado);
-  const currentStepIndex = activeStatus
+  const hasActiveOrder = Boolean(activeOrder);
+  const activeStatus = hasActiveOrder ? normalizeStatus(activeOrder?.estado) : null;
+  const currentStepIndex = hasActiveOrder
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
     : 0;
-
-  const hasActiveOrder = Boolean(activeOrder);
+  const finalStepReached =
+    hasActiveOrder && (activeStatus === 'en_camino' || activeStatus === 'entregado');
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -321,9 +331,12 @@ export default function HomeScreen({ navigation }) {
             </Text>
             <View style={styles.stepsWrapper}>
               {ORDER_STEPS.map((step, index) => {
-                const isCompleted = index < currentStepIndex;
-                const isCurrent = index === currentStepIndex;
-                const isReached = index <= currentStepIndex;
+                const isFinalStep = step.key === 'entregado';
+                const isCurrent = step.key === activeStatus;
+                const isCompleted =
+                  index < currentStepIndex ||
+                  (isFinalStep && finalStepReached);
+                const isReached = isCompleted || isCurrent;
                 return (
                   <View key={step.key} style={styles.stepItem}>
                     <View style={styles.stepRow}>
@@ -347,7 +360,8 @@ export default function HomeScreen({ navigation }) {
                         <View
                           style={[
                             styles.stepConnector,
-                            index < currentStepIndex
+                            index < currentStepIndex ||
+                            (index === currentStepIndex && finalStepReached)
                               ? styles.stepConnectorActive
                               : styles.stepConnectorInactive,
                           ]}
