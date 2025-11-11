@@ -19,6 +19,7 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
             'estado_receta',
             'receta_url',
             'observaciones_receta',
+            'receta_omitida',
         ]
         read_only_fields = [
             'producto_nombre',
@@ -27,6 +28,7 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
             'estado_receta',
             'receta_url',
             'observaciones_receta',
+            'receta_omitida',
         ]
 
     def get_receta_url(self, obj):
@@ -42,7 +44,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
     cliente_email = serializers.CharField(source='cliente.email', read_only=True)
     farmacia_nombre = serializers.CharField(source='farmacia.nombre', read_only=True)
-    detalles = DetallePedidoSerializer(many=True, read_only=True)
+    detalles = serializers.SerializerMethodField()
     puede_aceptar = serializers.SerializerMethodField()
 
     class Meta:
@@ -60,7 +62,32 @@ class PedidoSerializer(serializers.ModelSerializer):
             'puede_aceptar',
         ]
 
+    def get_detalles(self, obj):
+        # Si el pedido está aceptado o en un estado avanzado, excluir detalles con receta rechazada omitida
+        if obj.estado in ['aceptado', 'en_preparacion', 'en_camino', 'entregado']:
+            detalles_validos = obj.detalles.exclude(
+                requiere_receta=True,
+                estado_receta='rechazada',
+                receta_omitida=True
+            )
+        else:
+            # Para pedidos pendientes, mostrar todos los detalles
+            detalles_validos = obj.detalles.all()
+        
+        return DetallePedidoSerializer(detalles_validos, many=True, context=self.context).data
+
     def get_puede_aceptar(self, obj):
-        return not obj.detalles.filter(
-            requiere_receta=True
-        ).exclude(estado_receta='aprobada').exists()
+        # No se puede aceptar si hay recetas pendientes sin resolver
+        recetas_pendientes = obj.detalles.filter(
+            requiere_receta=True,
+            estado_receta='pendiente'
+        ).exists()
+        
+        # No se puede aceptar si hay recetas rechazadas sin que el cliente haya decidido (reenviar u omitir)
+        recetas_rechazadas_pendientes = obj.detalles.filter(
+            requiere_receta=True,
+            estado_receta='rechazada',
+            receta_omitida=False
+        ).exists()
+        
+        return not recetas_pendientes and not recetas_rechazadas_pendientes

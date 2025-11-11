@@ -18,7 +18,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'password', 'nombre',
             'tipo_usuario', 'direccion', 'telefono',
-            'horarios', 'latitud', 'longitud'
+            'horarios', 'latitud', 'longitud', 'matricula'
         ]
         extra_kwargs = {'password': {'write_only': True}}
 
@@ -51,7 +51,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'password', 'nombre', 'tipo_usuario',
             'direccion', 'telefono', 'horarios',
-            'latitud', 'longitud'
+            'latitud', 'longitud', 'matricula'
         ]
 
     def validate_email(self, value):
@@ -63,11 +63,16 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         tipo_usuario = attrs.get('tipo_usuario')
         telefono = attrs.get('telefono')
+        matricula = attrs.get('matricula')
 
         if tipo_usuario == 'farmacia':
             if not telefono or not str(telefono).strip():
                 raise serializers.ValidationError({
                     'telefono': 'Las farmacias deben proporcionar un teléfono de contacto.'
+                })
+            if not matricula or not str(matricula).strip():
+                raise serializers.ValidationError({
+                    'matricula': 'Las farmacias deben proporcionar un número de matrícula.'
                 })
 
         return attrs
@@ -89,7 +94,7 @@ class FarmaciaSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'nombre', 'email', 'direccion', 'telefono',
-            'horarios', 'latitud', 'longitud'
+            'horarios', 'latitud', 'longitud', 'matricula'
         ]
 
 

@@ -53,6 +53,7 @@ class DetallePedido(models.Model):
     )
     receta_archivo = models.FileField(upload_to='recetas/', blank=True, null=True)
     observaciones_receta = models.TextField(blank=True)
+    receta_omitida = models.BooleanField(default=False, verbose_name="Receta rechazada omitida por cliente")
 
     def __str__(self):
         return f"{self.producto.nombre} x{self.cantidad}"

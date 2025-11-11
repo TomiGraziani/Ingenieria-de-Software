@@ -18,6 +18,7 @@ export default function LoginScreen({ navigation }) {
   const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const styles = createStyles(theme);
 
@@ -102,14 +103,24 @@ export default function LoginScreen({ navigation }) {
           />
 
           <Text style={styles.label}>Contraseña</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ingresá tu contraseña"
-            placeholderTextColor={theme.colors.textSecondary}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Ingresá tu contraseña"
+              placeholderTextColor={theme.colors.textSecondary}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Text style={styles.passwordToggleText}>
+                {showPassword ? '🙈' : '👁️'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {loading ? (
             <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
@@ -217,5 +228,22 @@ const createStyles = (theme) =>
       textAlign: 'center',
       fontSize: 15,
       fontWeight: '600',
+    },
+    passwordContainer: {
+      position: 'relative',
+      marginBottom: 18,
+    },
+    passwordInput: {
+      paddingRight: 50,
+      marginBottom: 0,
+    },
+    passwordToggle: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      padding: 4,
+    },
+    passwordToggleText: {
+      fontSize: 20,
     },
   });

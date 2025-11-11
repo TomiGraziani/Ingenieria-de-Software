@@ -12,12 +12,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Dimensions,
+  ScrollView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import getClienteOrdersStorageKey from "../utils/storageKeys";
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 const formatRecetaNombre = (receta) => {
   if (!receta) return null;
@@ -214,10 +218,10 @@ export default function ProductosFarmaciaScreen({ route }) {
         return prev.map((item) =>
           item.producto.id === productoSeleccionado.id
             ? {
-                ...item,
-                cantidad: item.cantidad + cantidadNum,
-                receta: item.receta || recetaAdjunta,
-              }
+              ...item,
+              cantidad: item.cantidad + cantidadNum,
+              receta: item.receta || recetaAdjunta,
+            }
             : item
         );
       }
@@ -231,8 +235,21 @@ export default function ProductosFarmaciaScreen({ route }) {
     cerrarModalProducto();
   };
 
-  const eliminarDelCarrito = (productoId) => {
-    setCarrito((prev) => prev.filter((item) => item.producto.id !== productoId));
+  const eliminarDelCarrito = (productoId, productoNombre) => {
+    Alert.alert(
+      "¿Estás seguro?",
+      `¿Estás seguro que deseas quitar este medicamento: ${productoNombre}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Quitar",
+          style: "destructive",
+          onPress: () => {
+            setCarrito((prev) => prev.filter((item) => item.producto.id !== productoId));
+          },
+        },
+      ]
+    );
   };
 
   const totalProductos = useMemo(
@@ -292,18 +309,17 @@ export default function ProductosFarmaciaScreen({ route }) {
       const detalles = Array.isArray(pedidoCreado?.detalles) ? pedidoCreado.detalles : [];
       const resumenProductos = detalles.length
         ? detalles
-            .map(
-              (detalle) =>
-                `${
-                  detalle.producto_nombre || detalle.productoNombre || detalle.producto || "Producto"
-                } × ${detalle.cantidad ?? 1}`
-            )
-            .join(", ")
+          .map(
+            (detalle) =>
+              `${detalle.producto_nombre || detalle.productoNombre || detalle.producto || "Producto"
+              } × ${detalle.cantidad ?? 1}`
+          )
+          .join(", ")
         : carrito
-            .map(
-              (item) => `${item.producto?.nombre || "Producto"} × ${item.cantidad ?? 1}`
-            )
-            .join(", ");
+          .map(
+            (item) => `${item.producto?.nombre || "Producto"} × ${item.cantidad ?? 1}`
+          )
+          .join(", ");
 
       const nuevoPedido = {
         id: pedidoCreado?.id,
@@ -405,7 +421,7 @@ export default function ProductosFarmaciaScreen({ route }) {
       <FlatList
         data={productos}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ paddingBottom: carrito.length > 0 ? 200 : 0 }}
+        contentContainerStyle={{ paddingBottom: carrito.length > 0 ? 180 : 20 }}
         ListEmptyComponent={
           <Text style={styles.emptyText}>Esta farmacia no tiene productos cargados.</Text>
         }
@@ -438,62 +454,67 @@ export default function ProductosFarmaciaScreen({ route }) {
 
       {carrito.length > 0 ? (
         <SafeAreaView edges={['bottom']} style={styles.cartContainerWrapper}>
-          <View style={styles.cartContainer}>
-          <Text style={styles.cartTitle}>🧺 Pedido actual</Text>
-          {carrito.map((item) => (
-            <View key={item.producto.id} style={styles.cartItem}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cartItemName}>
-                  {item.producto.nombre} × {item.cantidad}
-                </Text>
-                <Text style={styles.cartItemPrice}>
-                  ${Number(item.producto.precio || 0) * item.cantidad}
-                </Text>
-                {item.producto.requiere_receta ? (
-                  <Text style={styles.cartItemReceta}>
-                    {item.receta
-                      ? `📄 ${formatRecetaNombre(item.receta)}`
-                      : "📄 Receta pendiente"}
-                  </Text>
-                ) : (
-                  <Text style={styles.cartItemReceta}>✅ Sin receta</Text>
-                )}
-              </View>
-
-              <View style={styles.cartActions}>
-                <TouchableOpacity
-                  style={styles.secondaryAction}
-                  onPress={() => abrirModalProducto(item.producto, true)}
-                >
-                  <Text style={styles.secondaryActionText}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => eliminarDelCarrito(item.producto.id)}
-                >
-                  <Text style={styles.removeButtonText}>Quitar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-
-          <View style={styles.cartSummary}>
-            <Text style={styles.summaryText}>Productos: {totalProductos}</Text>
-            <Text style={styles.summaryText}>
-              Total estimado: ${totalEstimado.toFixed(2)}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={abrirModalDireccion}
-            disabled={procesandoPedido}
+          <ScrollView
+            style={styles.cartScrollView}
+            contentContainerStyle={styles.cartContainer}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.confirmButtonText}>
-              {procesandoPedido ? "Enviando..." : "Confirmar pedido"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <Text style={styles.cartTitle}>🧺 Pedido actual</Text>
+            {carrito.map((item) => (
+              <View key={item.producto.id} style={styles.cartItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cartItemName}>
+                    {item.producto.nombre} × {item.cantidad}
+                  </Text>
+                  <Text style={styles.cartItemPrice}>
+                    ${Number(item.producto.precio || 0) * item.cantidad}
+                  </Text>
+                  {item.producto.requiere_receta ? (
+                    <Text style={styles.cartItemReceta}>
+                      {item.receta
+                        ? `📄 ${formatRecetaNombre(item.receta)}`
+                        : "📄 Receta pendiente"}
+                    </Text>
+                  ) : (
+                    <Text style={styles.cartItemReceta}>✅ Sin receta</Text>
+                  )}
+                </View>
+
+                <View style={styles.cartActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryAction}
+                    onPress={() => abrirModalProducto(item.producto, true)}
+                  >
+                    <Text style={styles.secondaryActionText}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => eliminarDelCarrito(item.producto.id, item.producto.nombre)}
+                  >
+                    <Text style={styles.removeButtonText}>Quitar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+
+            <View style={styles.cartSummary}>
+              <Text style={styles.summaryText}>Productos: {totalProductos}</Text>
+              <Text style={styles.summaryText}>
+                Total estimado: ${totalEstimado.toFixed(2)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={abrirModalDireccion}
+              disabled={procesandoPedido}
+            >
+              <Text style={styles.confirmButtonText}>
+                {procesandoPedido ? "Enviando..." : "Confirmar pedido"}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </SafeAreaView>
       ) : null}
 
@@ -617,20 +638,32 @@ export default function ProductosFarmaciaScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16 },
-  title: { fontSize: 20, fontWeight: "bold", color: "#1E88E5", marginBottom: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 12,
+    paddingHorizontal: 14,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1E88E5",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 16 },
+  emptyText: { textAlign: "center", marginTop: 40, color: "#888", fontSize: 15 },
   card: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f8f9fa",
     borderRadius: 10,
-    padding: 14,
+    padding: 12,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#ddd",
-    gap: 12,
+    gap: 10,
+    minHeight: 100,
   },
   nombre: { fontSize: 16, fontWeight: "bold", color: "#333" },
   presentacion: { fontSize: 13, color: "#555", marginTop: 2 },
@@ -654,23 +687,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#bbd0ff",
     zIndex: 1000,
+    maxHeight: screenHeight * 0.45,
+  },
+  cartScrollView: {
+    maxHeight: screenHeight * 0.45,
   },
   cartContainer: {
-    padding: 16,
+    padding: 12,
+    paddingBottom: 16,
     borderRadius: 12,
     backgroundColor: "#eef4ff",
   },
-  cartTitle: { fontSize: 18, fontWeight: "700", color: "#1E88E5", marginBottom: 12 },
+  cartTitle: { fontSize: 16, fontWeight: "700", color: "#1E88E5", marginBottom: 10 },
   cartItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-    gap: 12,
+    marginBottom: 10,
+    gap: 10,
+    paddingVertical: 4,
   },
-  cartItemName: { fontSize: 15, fontWeight: "600", color: "#1F2937" },
-  cartItemPrice: { fontSize: 14, color: "#2E7D32", marginTop: 2 },
-  cartItemReceta: { fontSize: 12, color: "#374151", marginTop: 2 },
-  cartActions: { flexDirection: "row", gap: 8 },
+  cartItemName: { fontSize: 14, fontWeight: "600", color: "#1F2937", flexShrink: 1 },
+  cartItemPrice: { fontSize: 13, color: "#2E7D32", marginTop: 2 },
+  cartItemReceta: { fontSize: 11, color: "#374151", marginTop: 2 },
+  cartActions: { flexDirection: "row", gap: 6, flexShrink: 0 },
   secondaryAction: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -688,16 +727,21 @@ const styles = StyleSheet.create({
   cartSummary: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#bbd0ff",
   },
-  summaryText: { fontSize: 14, fontWeight: "600", color: "#1F2937" },
+  summaryText: { fontSize: 13, fontWeight: "600", color: "#1F2937" },
   confirmButton: {
     backgroundColor: "#1E88E5",
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  confirmButtonText: { color: "#fff", fontWeight: "700", textAlign: "center" },
+  confirmButtonText: { color: "#fff", fontWeight: "700", textAlign: "center", fontSize: 16 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",

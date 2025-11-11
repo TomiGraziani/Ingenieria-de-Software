@@ -6,10 +6,16 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../theme/ThemeProvider';
 import API from '../api/api';
@@ -50,16 +56,16 @@ const normalizeOrderFromApi = (order) => {
   const detalles = Array.isArray(order.detalles) ? order.detalles : [];
   const productosResumen = detalles.length
     ? detalles
-        .map((detalle) => {
-          const nombreProducto =
-            detalle.producto_nombre ||
-            detalle.productoNombre ||
-            detalle.producto ||
-            'Producto';
-          const cantidad = detalle.cantidad ?? 1;
-          return `${nombreProducto} × ${cantidad}`;
-        })
-        .join(', ')
+      .map((detalle) => {
+        const nombreProducto =
+          detalle.producto_nombre ||
+          detalle.productoNombre ||
+          detalle.producto ||
+          'Producto';
+        const cantidad = detalle.cantidad ?? 1;
+        return `${nombreProducto} × ${cantidad}`;
+      })
+      .join(', ')
     : order.productoNombre || order.producto_nombre || '';
 
   const rawId =
@@ -88,6 +94,7 @@ const normalizeOrderFromApi = (order) => {
     farmaciaNombre: order.farmacia_nombre || order.farmaciaNombre || order.farmacia || '',
     farmacia: order.farmacia_nombre || order.farmacia || order.farmaciaNombre || '',
     createdAt: order.fecha || order.createdAt || order.created_at || new Date().toISOString(),
+    detalles: detalles, // Incluir detalles en el objeto normalizado
   };
 };
 
@@ -173,6 +180,8 @@ export default function HomeScreen({ navigation }) {
   const [activeOrder, setActiveOrder] = useState(null);
   const [ordersCount, setOrdersCount] = useState(0);
   const lastRejectedAlertId = useRef(null);
+  const [rejectedRecetaModal, setRejectedRecetaModal] = useState(null);
+  const [recetaReenviando, setRecetaReenviando] = useState(false);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -244,11 +253,40 @@ export default function HomeScreen({ navigation }) {
       const running = sorted.find((order) => isActiveStatus(order.estado));
       setActiveOrder(running || null);
 
+      // Buscar recetas rechazadas pendientes de acción del cliente
+      const pedidosConRecetasRechazadas = sorted.filter((order) => {
+        if (!order.detalles || !Array.isArray(order.detalles)) return false;
+        return order.detalles.some(
+          (detalle) =>
+            detalle.requiere_receta &&
+            detalle.estado_receta === 'rechazada' &&
+            !detalle.receta_omitida
+        );
+      });
+
+      if (pedidosConRecetasRechazadas.length > 0 && !rejectedRecetaModal) {
+        const pedidoConRecetaRechazada = pedidosConRecetasRechazadas[0];
+        const recetaRechazada = pedidoConRecetaRechazada.detalles.find(
+          (detalle) =>
+            detalle.requiere_receta &&
+            detalle.estado_receta === 'rechazada' &&
+            !detalle.receta_omitida
+        );
+
+        if (recetaRechazada) {
+          setRejectedRecetaModal({
+            pedidoId: pedidoConRecetaRechazada.id,
+            detalleId: recetaRechazada.id,
+            productoNombre: recetaRechazada.producto_nombre || 'producto',
+          });
+        }
+      }
+
       const latestRejected = sorted.find(
         (order) => (order?.estado || '').toString().toLowerCase() === 'rechazado'
       );
 
-      if (!running && latestRejected) {
+      if (!running && latestRejected && !pedidosConRecetasRechazadas.length) {
         const rejectionIdentifier =
           latestRejected.id ??
           latestRejected.numero ??
@@ -324,13 +362,170 @@ export default function HomeScreen({ navigation }) {
   const currentStepIndex = hasActiveOrder
     ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
     : -1;
-  
+
   // Una etapa está completada si su índice es menor o igual al índice de la etapa actual
   // Esto significa que cuando el estado es "creado", la etapa 1 (índice 0) está completada
   // Cuando el estado es "aceptado", las etapas 1 y 2 (índices 0 y 1) están completadas, etc.
   const isStepCompleted = (index) => {
     if (currentStepIndex === -1) return false;
     return index <= currentStepIndex;
+  };
+
+  const solicitarReceta = () =>
+    new Promise((resolve) => {
+      let alreadyResolved = false;
+
+      const safeResolve = (value) => {
+        if (!alreadyResolved) {
+          alreadyResolved = true;
+          resolve(value);
+        }
+      };
+
+      const tomarFoto = async () => {
+        try {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert(
+              'Permisos necesarios',
+              'Se necesitan permisos de cámara para tomar una foto de la receta.'
+            );
+            safeResolve(null);
+            return;
+          }
+
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: false,
+            quality: 0.8,
+          });
+
+          if (result.canceled) {
+            safeResolve(null);
+            return;
+          }
+
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const receta = {
+              uri: asset.uri,
+              name: `receta_${Date.now()}.jpg`,
+              mimeType: 'image/jpeg',
+              type: 'image/jpeg',
+            };
+            safeResolve(receta);
+          } else {
+            safeResolve(null);
+          }
+        } catch (error) {
+          console.error('Error al tomar foto:', error);
+          Alert.alert('Error', 'No se pudo tomar la foto de la receta.');
+          safeResolve(null);
+        }
+      };
+
+      const abrirPicker = async () => {
+        try {
+          const result = await DocumentPicker.getDocumentAsync({
+            type: ['image/*', 'application/pdf'],
+            copyToCacheDirectory: true,
+          });
+
+          if (result.canceled) {
+            safeResolve(null);
+            return;
+          }
+
+          safeResolve(result.assets?.[0] || null);
+        } catch (error) {
+          console.error('Error al seleccionar receta:', error);
+          Alert.alert('Error', 'No se pudo seleccionar el archivo de la receta.');
+          safeResolve(null);
+        }
+      };
+
+      Alert.alert(
+        'Receta necesaria',
+        'Este medicamento requiere que adjuntes una receta médica.',
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => safeResolve(null) },
+          { text: '📷 Tomar foto', onPress: () => tomarFoto() },
+          { text: '📁 Seleccionar archivo', onPress: () => abrirPicker() },
+        ],
+        { cancelable: false }
+      );
+    });
+
+  const reenviarReceta = async () => {
+    if (!rejectedRecetaModal) return;
+
+    try {
+      setRecetaReenviando(true);
+      const receta = await solicitarReceta();
+
+      if (!receta) {
+        setRecetaReenviando(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('receta', {
+        uri: receta.uri,
+        name: receta.name || `receta-${Date.now()}`,
+        type: receta.mimeType || 'image/jpeg',
+      });
+
+      await API.post(
+        `pedidos/detalles/${rejectedRecetaModal.detalleId}/receta/reenviar/`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      Alert.alert('✅ Receta reenviada', 'Tu receta fue enviada nuevamente a la farmacia.');
+      setRejectedRecetaModal(null);
+      loadOrders();
+    } catch (error) {
+      console.error('Error al reenviar receta:', error.response?.data || error);
+      Alert.alert('Error', error.response?.data?.detail || 'No se pudo reenviar la receta.');
+    } finally {
+      setRecetaReenviando(false);
+    }
+  };
+
+  const omitirReceta = async () => {
+    if (!rejectedRecetaModal) return;
+
+    Alert.alert(
+      '¿Omitir receta?',
+      'Si omitís la receta, el pedido se realizará sin este medicamento. ¿Estás seguro?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Omitir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await API.post(
+                `pedidos/detalles/${rejectedRecetaModal.detalleId}/receta/omitir/`
+              );
+
+              Alert.alert(
+                '✅ Receta omitida',
+                'El pedido se realizará sin este medicamento cuando la farmacia lo acepte.'
+              );
+              setRejectedRecetaModal(null);
+              loadOrders();
+            } catch (error) {
+              console.error('Error al omitir receta:', error.response?.data || error);
+              Alert.alert('Error', error.response?.data?.detail || 'No se pudo omitir la receta.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -449,6 +644,45 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.footerText}>Recordatorios</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={!!rejectedRecetaModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRejectedRecetaModal(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>📄 Receta rechazada</Text>
+            <Text style={styles.modalSubtitle}>
+              Tu receta para "{rejectedRecetaModal?.productoNombre}" fue rechazada por la farmacia.
+              ¿Querés volver a enviarla o realizar el pedido de todas formas sin esa receta?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={omitirReceta}
+                disabled={recetaReenviando}
+              >
+                <Text style={styles.modalButtonText}>Omitir</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={reenviarReceta}
+                disabled={recetaReenviando}
+              >
+                <Text style={styles.modalButtonText}>
+                  {recetaReenviando ? 'Enviando...' : 'Reenviar receta'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -581,5 +815,62 @@ const createStyles = (theme, insets) => {
     },
     footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     footerText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      padding: 24,
+      shadowColor: '#000',
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 10,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: theme.colors.text,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    modalButtonPrimary: {
+      backgroundColor: theme.colors.primary,
+    },
+    modalButtonSecondary: {
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    modalButtonText: {
+      color: theme.colors.buttonText,
+      fontWeight: '600',
+      fontSize: 15,
+    },
   });
 };

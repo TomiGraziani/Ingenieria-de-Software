@@ -55,6 +55,7 @@ class User(AbstractUser):
     direccion = models.CharField(max_length=255, blank=True, null=True)
     telefono = models.CharField(max_length=20, blank=True, null=True)
     horarios = models.CharField(max_length=100, blank=True, null=True)
+    matricula = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número de matrícula")
 
     # 🗺️ Campos para geolocalización
     latitud = models.FloatField(blank=True, null=True)

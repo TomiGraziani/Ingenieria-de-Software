@@ -19,10 +19,13 @@ export default function RegisterScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rol, setRol] = useState('cliente');
   const [direccion, setDireccion] = useState('');
   const [horarios, setHorarios] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [matricula, setMatricula] = useState('');
+  const [mayorEdad, setMayorEdad] = useState(false);
   const [loading, setLoading] = useState(false);
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -56,6 +59,18 @@ export default function RegisterScreen({ navigation }) {
         Alert.alert('Error', 'Ingresá un teléfono válido (incluí el código de área).');
         return;
       }
+
+      if (!matricula.trim()) {
+        Alert.alert('Error', 'Ingresá el número de matrícula de la farmacia.');
+        return;
+      }
+    }
+
+    if (rol === 'repartidor') {
+      if (!mayorEdad) {
+        Alert.alert('Error', 'Debés declarar que sos mayor de 18 años para registrarte como repartidor.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -72,6 +87,10 @@ export default function RegisterScreen({ navigation }) {
       const trimmedPhone = telefono.trim();
       if (trimmedPhone) {
         payload.telefono = trimmedPhone;
+      }
+
+      if (rol === 'farmacia' && matricula.trim()) {
+        payload.matricula = matricula.trim();
       }
 
       // 🔹 Petición al backend para registrar
@@ -109,7 +128,7 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert(
         'Error',
         error.response?.data?.detail ||
-          'No se pudo completar el registro. Intenta nuevamente.'
+        'No se pudo completar el registro. Intenta nuevamente.'
       );
     } finally {
       setLoading(false);
@@ -148,14 +167,24 @@ export default function RegisterScreen({ navigation }) {
           />
 
           <Text style={styles.label}>Contraseña</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mínimo 6 caracteres"
-            placeholderTextColor={theme.colors.textSecondary}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor={theme.colors.textSecondary}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Text style={styles.passwordToggleText}>
+                {showPassword ? '🙈' : '👁️'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.label}>Selecciona tu rol</Text>
           <View style={styles.pickerWrapper}>
@@ -173,6 +202,16 @@ export default function RegisterScreen({ navigation }) {
 
           {rol === 'farmacia' && (
             <>
+              <Text style={styles.label}>Número de matrícula *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingresá el número de matrícula"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="default"
+                value={matricula}
+                onChangeText={setMatricula}
+              />
+
               <Text style={styles.label}>Teléfono de contacto</Text>
               <TextInput
                 style={styles.input}
@@ -201,6 +240,20 @@ export default function RegisterScreen({ navigation }) {
                 onChangeText={setHorarios}
               />
             </>
+          )}
+
+          {rol === 'repartidor' && (
+            <View style={styles.checkboxContainer}>
+              <TouchableOpacity
+                style={styles.checkbox}
+                onPress={() => setMayorEdad(!mayorEdad)}
+              >
+                <Text style={styles.checkboxIcon}>{mayorEdad ? '☑️' : '☐'}</Text>
+                <Text style={styles.checkboxLabel}>
+                  Declaro ser mayor de 18 años
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {loading ? (
@@ -320,5 +373,39 @@ const createStyles = (theme) =>
       textAlign: 'center',
       fontSize: 15,
       fontWeight: '600',
+    },
+    passwordContainer: {
+      position: 'relative',
+      marginBottom: 18,
+    },
+    passwordInput: {
+      paddingRight: 50,
+      marginBottom: 0,
+    },
+    passwordToggle: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      padding: 4,
+    },
+    passwordToggleText: {
+      fontSize: 20,
+    },
+    checkboxContainer: {
+      marginBottom: 18,
+    },
+    checkbox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    checkboxIcon: {
+      fontSize: 20,
+      marginRight: 10,
+    },
+    checkboxLabel: {
+      fontSize: 14,
+      color: theme.colors.text,
+      flex: 1,
     },
   });

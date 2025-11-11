@@ -213,13 +213,29 @@ class ActualizarEstadoPedidoView(APIView):
         # La farmacia puede actualizar a cualquier estado
         if request.user == pedido.farmacia:
             if nuevo_estado == 'aceptado':
+                # Verificar que no haya recetas pendientes
                 pendientes = pedido.detalles.filter(
-                    requiere_receta=True
-                ).exclude(estado_receta='aprobada')
+                    requiere_receta=True,
+                    estado_receta='pendiente'
+                )
                 if pendientes.exists():
                     return Response(
                         {
                             'detail': 'No podés aceptar el pedido hasta aprobar todas las recetas requeridas.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
+                # Verificar que no haya recetas rechazadas sin resolver
+                rechazadas_pendientes = pedido.detalles.filter(
+                    requiere_receta=True,
+                    estado_receta='rechazada',
+                    receta_omitida=False
+                )
+                if rechazadas_pendientes.exists():
+                    return Response(
+                        {
+                            'detail': 'No podés aceptar el pedido hasta que el cliente responda sobre las recetas rechazadas.'
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
@@ -276,6 +292,91 @@ class ActualizarEstadoRecetaView(APIView):
 
         detalle.estado_receta = nuevo_estado
         detalle.observaciones_receta = observaciones
+        # Si se rechaza una receta, asegurar que receta_omitida sea False inicialmente
+        if nuevo_estado == 'rechazada':
+            detalle.receta_omitida = False
+        detalle.save()
+
+        serializer = DetallePedidoSerializer(detalle, context={'request': request})
+        return Response(serializer.data)
+
+
+class ReenviarRecetaView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request, detalle_id):
+        detalle = get_object_or_404(
+            DetallePedido.objects.select_related('pedido__cliente', 'pedido__farmacia', 'producto'),
+            pk=detalle_id,
+        )
+
+        # Solo el cliente dueño del pedido puede reenviar la receta
+        if request.user != detalle.pedido.cliente:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if not detalle.requiere_receta:
+            return Response(
+                {'detail': 'Este producto no requiere receta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if detalle.estado_receta != 'rechazada':
+            return Response(
+                {'detail': 'Solo se pueden reenviar recetas que fueron rechazadas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Obtener el archivo de receta
+        receta_file = request.FILES.get('receta')
+        if not receta_file:
+            return Response(
+                {'detail': 'Debés adjuntar una nueva receta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Eliminar la receta anterior si existe
+        if detalle.receta_archivo:
+            detalle.receta_archivo.delete(save=False)
+
+        # Guardar la nueva receta
+        detalle.receta_archivo = receta_file
+        detalle.estado_receta = 'pendiente'
+        detalle.receta_omitida = False
+        detalle.observaciones_receta = ''
+        detalle.save()
+
+        serializer = DetallePedidoSerializer(detalle, context={'request': request})
+        return Response(serializer.data)
+
+
+class OmitirRecetaView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, detalle_id):
+        detalle = get_object_or_404(
+            DetallePedido.objects.select_related('pedido__cliente', 'pedido__farmacia', 'producto'),
+            pk=detalle_id,
+        )
+
+        # Solo el cliente dueño del pedido puede omitir la receta
+        if request.user != detalle.pedido.cliente:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if not detalle.requiere_receta:
+            return Response(
+                {'detail': 'Este producto no requiere receta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if detalle.estado_receta != 'rechazada':
+            return Response(
+                {'detail': 'Solo se pueden omitir recetas que fueron rechazadas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Marcar la receta como omitida
+        detalle.receta_omitida = True
         detalle.save()
 
         serializer = DetallePedidoSerializer(detalle, context={'request': request})
