@@ -95,9 +95,9 @@ export default function MisPedidosScreen({ navigation }) {
       const normalizedEmail = userEmail?.toString().toLowerCase();
       const filtered = normalizedEmail
         ? data.filter((order) => {
-            const email = (order?.cliente_email || "").toString().toLowerCase();
-            return email === normalizedEmail;
-          })
+          const email = (order?.cliente_email || "").toString().toLowerCase();
+          return email === normalizedEmail;
+        })
         : data;
 
       setOrders(filtered);
@@ -138,14 +138,36 @@ export default function MisPedidosScreen({ navigation }) {
           {detalle.estado_receta === "aprobada"
             ? "Receta aprobada"
             : detalle.estado_receta === "rechazada"
-            ? "Receta rechazada"
-            : "Receta pendiente"}
+              ? "Receta rechazada"
+              : "Receta pendiente"}
         </Text>
       ) : (
         <Text style={styles.detalleReceta}>Sin receta</Text>
       )}
     </View>
   );
+
+  // Filtrar detalles para mostrar solo los que tienen receta aprobada o no requieren receta
+  // Solo filtrar si el pedido está aceptado o en un estado avanzado
+  const filtrarDetalles = (detalles, estadoPedido) => {
+    if (!detalles || !Array.isArray(detalles)) return [];
+
+    // Si el pedido está aceptado o en un estado avanzado, filtrar detalles
+    const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado'];
+    const estadoNormalizado = (estadoPedido || '').toString().toLowerCase();
+
+    if (estadosAvanzados.includes(estadoNormalizado)) {
+      return detalles.filter(
+        (detalle) =>
+          !detalle.requiere_receta ||
+          detalle.estado_receta === "aprobada" ||
+          (detalle.estado_receta === "rechazada" && detalle.receta_omitida)
+      );
+    }
+
+    // Para pedidos pendientes, mostrar todos los detalles
+    return detalles;
+  };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
@@ -160,7 +182,7 @@ export default function MisPedidosScreen({ navigation }) {
 
       <View style={styles.divider} />
       <Text style={styles.detalleTitulo}>Productos</Text>
-      {item.detalles.map(renderDetalle)}
+      {filtrarDetalles(item.detalles, item.estado).map(renderDetalle)}
     </View>
   );
 

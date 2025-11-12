@@ -421,7 +421,10 @@ export default function ProductosFarmaciaScreen({ route }) {
       <FlatList
         data={productos}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ paddingBottom: carrito.length > 0 ? 180 : 20 }}
+        contentContainerStyle={{
+          paddingBottom: carrito.length > 0 ? 200 : 20,
+          paddingTop: 8,
+        }}
         ListEmptyComponent={
           <Text style={styles.emptyText}>Esta farmacia no tiene productos cargados.</Text>
         }
@@ -688,6 +691,11 @@ const styles = StyleSheet.create({
     borderTopColor: "#bbd0ff",
     zIndex: 1000,
     maxHeight: screenHeight * 0.45,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   cartScrollView: {
     maxHeight: screenHeight * 0.45,

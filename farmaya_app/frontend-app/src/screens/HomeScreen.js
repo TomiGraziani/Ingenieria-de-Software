@@ -48,14 +48,37 @@ const STATUS_RANK = {
 
 const CANCELED_STATES = new Set(['cancelado', 'rechazado']);
 
+// Filtrar detalles para mostrar solo los que tienen receta aprobada o no requieren receta
+const filtrarDetalles = (detalles, estadoPedido) => {
+  if (!detalles || !Array.isArray(detalles)) return [];
+
+  // Si el pedido está aceptado o en un estado avanzado, filtrar detalles
+  const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado'];
+  const estadoNormalizado = (estadoPedido || '').toString().toLowerCase();
+
+  if (estadosAvanzados.includes(estadoNormalizado)) {
+    return detalles.filter(
+      (detalle) =>
+        !detalle.requiere_receta ||
+        detalle.estado_receta === 'aprobada' ||
+        (detalle.estado_receta === 'rechazada' && detalle.receta_omitida)
+    );
+  }
+
+  // Para pedidos pendientes, mostrar todos los detalles
+  return detalles;
+};
+
 const normalizeOrderFromApi = (order) => {
   if (!order || typeof order !== 'object') {
     return null;
   }
 
-  const detalles = Array.isArray(order.detalles) ? order.detalles : [];
-  const productosResumen = detalles.length
-    ? detalles
+  const detallesRaw = Array.isArray(order.detalles) ? order.detalles : [];
+  const detallesFiltrados = filtrarDetalles(detallesRaw, order.estado);
+
+  const productosResumen = detallesFiltrados.length
+    ? detallesFiltrados
       .map((detalle) => {
         const nombreProducto =
           detalle.producto_nombre ||
@@ -94,7 +117,7 @@ const normalizeOrderFromApi = (order) => {
     farmaciaNombre: order.farmacia_nombre || order.farmaciaNombre || order.farmacia || '',
     farmacia: order.farmacia_nombre || order.farmacia || order.farmaciaNombre || '',
     createdAt: order.fecha || order.createdAt || order.created_at || new Date().toISOString(),
-    detalles: detalles, // Incluir detalles en el objeto normalizado
+    detalles: detallesFiltrados, // Incluir detalles filtrados en el objeto normalizado
   };
 };
 

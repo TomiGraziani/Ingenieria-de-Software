@@ -218,18 +218,35 @@ export default function PedidosFarmaciaScreen() {
         const pedidosCliente = safeParseJSON(storedCliente, []);
 
         if (Array.isArray(pedidosCliente) && pedidosCliente.length > 0) {
-          const actualizados = pedidosCliente.map((pedido) =>
-            pedido?.id?.toString() === id
-              ? {
-                  ...pedido,
-                  estado: estadoCliente,
-                  direccionEntrega,
-                  direccion_entrega: direccionEntrega,
-                  productoNombre: resumenProductos || pedido.productoNombre,
-                  producto_nombre: resumenProductos || pedido.producto_nombre,
-                }
-              : pedido
-          );
+          const actualizados = pedidosCliente.map((pedido) => {
+            if (pedido?.id?.toString() !== id) return pedido;
+
+            // Filtrar detalles: solo mostrar los que tienen receta aprobada o no requieren receta
+            // Solo filtrar si el pedido está aceptado o en un estado avanzado
+            const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado'];
+            const estadoNormalizado = (estadoCliente || '').toString().toLowerCase();
+
+            let detallesFiltrados = pedidoActualizado.detalles || pedido.detalles || [];
+
+            if (estadosAvanzados.includes(estadoNormalizado) && Array.isArray(detallesFiltrados)) {
+              detallesFiltrados = detallesFiltrados.filter(
+                (detalle) =>
+                  !detalle.requiere_receta ||
+                  detalle.estado_receta === "aprobada" ||
+                  (detalle.estado_receta === "rechazada" && detalle.receta_omitida)
+              );
+            }
+
+            return {
+              ...pedido,
+              estado: estadoCliente,
+              direccionEntrega,
+              direccion_entrega: direccionEntrega,
+              productoNombre: resumenProductos || pedido.productoNombre,
+              producto_nombre: resumenProductos || pedido.producto_nombre,
+              detalles: detallesFiltrados,
+            };
+          });
 
           await AsyncStorage.setItem(
             clienteOrdersKey,

@@ -78,16 +78,16 @@ export default function HomeFarmaciaScreen({ navigation }) {
 
     const detalles = Array.isArray(pedido.detalles)
       ? pedido.detalles.map((detalle) => ({
-          id: detalle.id,
-          productoId: detalle.producto,
-          productoNombre: detalle.producto_nombre,
-          cantidad: detalle.cantidad,
-          precioUnitario: Number(detalle.precio_unitario || 0),
-          requiereReceta: detalle.requiere_receta,
-          estadoReceta: detalle.estado_receta,
-          recetaUrl: detalle.receta_url,
-          observacionesReceta: detalle.observaciones_receta,
-        }))
+        id: detalle.id,
+        productoId: detalle.producto,
+        productoNombre: detalle.producto_nombre,
+        cantidad: detalle.cantidad,
+        precioUnitario: Number(detalle.precio_unitario || 0),
+        requiereReceta: detalle.requiere_receta,
+        estadoReceta: detalle.estado_receta,
+        recetaUrl: detalle.receta_url,
+        observacionesReceta: detalle.observaciones_receta,
+      }))
       : [];
 
     return {
@@ -109,8 +109,8 @@ export default function HomeFarmaciaScreen({ navigation }) {
       const response = await API.get("pedidos/");
       const pedidosNormalizados = Array.isArray(response.data)
         ? response.data
-            .map(normalizarPedido)
-            .filter((pedido) => pedido !== null)
+          .map(normalizarPedido)
+          .filter((pedido) => pedido !== null)
         : [];
 
       await Promise.all(
@@ -232,12 +232,29 @@ export default function HomeFarmaciaScreen({ navigation }) {
             estadoCliente = estadoPedido;
           }
 
+          // Filtrar detalles: solo mostrar los que tienen receta aprobada o no requieren receta
+          // Solo filtrar si el pedido está aceptado o en un estado avanzado
+          const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado'];
+          const estadoNormalizado = (estadoCliente || '').toString().toLowerCase();
+
+          let detallesFiltrados = pedido.detalles || item.detalles || [];
+
+          if (estadosAvanzados.includes(estadoNormalizado) && Array.isArray(detallesFiltrados)) {
+            detallesFiltrados = detallesFiltrados.filter(
+              (detalle) =>
+                !detalle.requiere_receta ||
+                detalle.estado_receta === "aprobada" ||
+                (detalle.estado_receta === "rechazada" && detalle.receta_omitida)
+            );
+          }
+
           return {
             ...item,
             estado: estadoCliente,
             direccionEntrega,
             productoNombre: resumenProductos,
             producto_nombre: resumenProductos,
+            detalles: detallesFiltrados,
           };
         });
 
@@ -437,10 +454,10 @@ export default function HomeFarmaciaScreen({ navigation }) {
           const detallesActualizados = pedido.detalles.map((detalle) =>
             detalle.id === detalleId
               ? {
-                  ...detalle,
-                  estadoReceta: nuevoEstado,
-                  estado_receta: nuevoEstado,
-                }
+                ...detalle,
+                estadoReceta: nuevoEstado,
+                estado_receta: nuevoEstado,
+              }
               : detalle
           );
 
@@ -580,9 +597,9 @@ export default function HomeFarmaciaScreen({ navigation }) {
               typeof p.puedeAceptar === "boolean"
                 ? p.puedeAceptar
                 : p.detalles.every((detalle) => {
-                    const estadoReceta = detalle.estadoReceta || "pendiente";
-                    return !detalle.requiereReceta || estadoReceta === "aprobada";
-                  });
+                  const estadoReceta = detalle.estadoReceta || "pendiente";
+                  return !detalle.requiereReceta || estadoReceta === "aprobada";
+                });
 
             return (
               <View key={p.id} style={styles.cardPedido}>
@@ -616,51 +633,51 @@ export default function HomeFarmaciaScreen({ navigation }) {
                                   styles.detalleEstadoReceta,
                                   {
                                     color:
-                                    RECETA_ESTADO_COLOR[estadoReceta] ||
-                                    theme.colors.textSecondary,
+                                      RECETA_ESTADO_COLOR[estadoReceta] ||
+                                      theme.colors.textSecondary,
                                   },
                                 ]}
                               >
-                              Estado de receta: {" "}
-                              {RECETA_ESTADO_LABEL[estadoReceta] || estadoReceta}
-                            </Text>
-                          ) : (
-                            <Text style={styles.detalleEstadoReceta}>✅ No requiere receta</Text>
-                          )}
-                        </View>
-
-                        {detalle.requiereReceta ? (
-                          <View style={styles.detalleAcciones}>
-                            {detalle.recetaUrl ? (
-                              <TouchableOpacity
-                                style={styles.btnReceta}
-                                onPress={() => abrirReceta(detalle.recetaUrl)}
-                              >
-                                <Text style={styles.btnRecetaText}>📄 Ver receta</Text>
-                              </TouchableOpacity>
+                                Estado de receta: {" "}
+                                {RECETA_ESTADO_LABEL[estadoReceta] || estadoReceta}
+                              </Text>
                             ) : (
-                              <Text style={styles.detalleInfo}>Sin receta adjunta</Text>
+                              <Text style={styles.detalleEstadoReceta}>✅ No requiere receta</Text>
                             )}
-
-                            {estadoReceta === "pendiente" ? (
-                              <>
-                                <TouchableOpacity
-                                  style={[styles.btnReceta, styles.btnRecetaAprobar]}
-                                  onPress={() => confirmarAccionReceta(detalle.id, "aprobada")}
-                                >
-                                  <Text style={styles.btnRecetaText}>✅ Aprobar</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={[styles.btnReceta, styles.btnRecetaRechazar]}
-                                  onPress={() => confirmarAccionReceta(detalle.id, "rechazada")}
-                                >
-                                  <Text style={styles.btnRecetaText}>✖ Rechazar</Text>
-                                </TouchableOpacity>
-                              </>
-                            ) : null}
                           </View>
-                        ) : null}
-                      </View>
+
+                          {detalle.requiereReceta ? (
+                            <View style={styles.detalleAcciones}>
+                              {detalle.recetaUrl ? (
+                                <TouchableOpacity
+                                  style={styles.btnReceta}
+                                  onPress={() => abrirReceta(detalle.recetaUrl)}
+                                >
+                                  <Text style={styles.btnRecetaText}>📄 Ver receta</Text>
+                                </TouchableOpacity>
+                              ) : (
+                                <Text style={styles.detalleInfo}>Sin receta adjunta</Text>
+                              )}
+
+                              {estadoReceta === "pendiente" ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={[styles.btnReceta, styles.btnRecetaAprobar]}
+                                    onPress={() => confirmarAccionReceta(detalle.id, "aprobada")}
+                                  >
+                                    <Text style={styles.btnRecetaText}>✅ Aprobar</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.btnReceta, styles.btnRecetaRechazar]}
+                                    onPress={() => confirmarAccionReceta(detalle.id, "rechazada")}
+                                  >
+                                    <Text style={styles.btnRecetaText}>✖ Rechazar</Text>
+                                  </TouchableOpacity>
+                                </>
+                              ) : null}
+                            </View>
+                          ) : null}
+                        </View>
                       );
                     })
                   )}
@@ -681,8 +698,8 @@ export default function HomeFarmaciaScreen({ navigation }) {
                       {pedidoProcesando === p.id && p.estado !== "aceptado"
                         ? "Procesando..."
                         : puedeAceptarPedido
-                        ? "Aceptar"
-                        : "Aprobar recetas"}
+                          ? "Aceptar"
+                          : "Aprobar recetas"}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
