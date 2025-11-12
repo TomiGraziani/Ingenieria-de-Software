@@ -17,8 +17,8 @@ export const extractErrorMessage = (error) => {
 
     // Si es un objeto con campos de validación
     if (typeof errorData === 'object' && !Array.isArray(errorData)) {
-      // Prioridad: email, nombre, telefono, matricula, password, etc.
-      const priorityFields = ['email', 'nombre', 'telefono', 'matricula', 'password', 'direccion'];
+      // Prioridad: email, nombre, dni, telefono, matricula, password, etc.
+      const priorityFields = ['email', 'nombre', 'dni', 'telefono', 'matricula', 'password', 'direccion'];
 
       for (const field of priorityFields) {
         if (errorData[field]) {
@@ -84,6 +84,10 @@ export const extractErrorMessage = (error) => {
     'Ya existe un/a usuario con este/a Correo electrónico.': 'Este correo electrónico ya está en uso.',
     'Ya existe un/a usuario con este/a nombre.': 'Este nombre ya está en uso.',
     'Ya existe un/a usuario con este/a correo electrónico.': 'Este correo electrónico ya está en uso.',
+    'Ya existe un usuario registrado con este DNI.': 'Este DNI ya está registrado.',
+    'El DNI solo debe contener números.': 'El DNI solo debe contener números.',
+    'El DNI debe tener 7, 8 o 10 dígitos.': 'El DNI debe tener 7, 8 o 10 dígitos.',
+    'El DNI es obligatorio para clientes y repartidores.': 'El DNI es obligatorio.',
     'Las farmacias deben proporcionar un teléfono de contacto.': 'Las farmacias deben proporcionar un teléfono de contacto.',
     'Las farmacias deben proporcionar un número de matrícula.': 'Las farmacias deben proporcionar un número de matrícula.',
   };

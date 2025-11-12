@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'password', 'nombre',
+            'id', 'email', 'password', 'nombre', 'dni',
             'tipo_usuario', 'direccion', 'telefono',
             'horarios', 'latitud', 'longitud', 'matricula'
         ]
@@ -80,7 +80,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'email', 'password', 'nombre', 'tipo_usuario',
+            'email', 'password', 'nombre', 'dni', 'tipo_usuario',
             'direccion', 'telefono', 'horarios',
             'latitud', 'longitud', 'matricula'
         ]
@@ -107,10 +107,38 @@ class RegisterSerializer(serializers.ModelSerializer):
                 )
         return value
 
+    def validate_dni(self, value):
+        """Valida que el DNI solo contenga números y tenga 7, 8 o 10 dígitos."""
+        if value:
+            # Remover espacios y guiones
+            dni_limpio = value.strip().replace('-', '').replace(' ', '')
+            
+            # Validar que solo contenga números
+            if not dni_limpio.isdigit():
+                raise serializers.ValidationError(
+                    'El DNI solo debe contener números.'
+                )
+            
+            # Validar longitud (7, 8 o 10 dígitos)
+            if len(dni_limpio) not in [7, 8, 10]:
+                raise serializers.ValidationError(
+                    'El DNI debe tener 7, 8 o 10 dígitos.'
+                )
+            
+            # Validar que no exista otro usuario con el mismo DNI
+            if User.objects.filter(dni=dni_limpio).exists():
+                raise serializers.ValidationError(
+                    'Ya existe un usuario registrado con este DNI.'
+                )
+            
+            return dni_limpio
+        return value
+
     def validate(self, attrs):
         tipo_usuario = attrs.get('tipo_usuario')
         telefono = attrs.get('telefono')
         matricula = attrs.get('matricula')
+        dni = attrs.get('dni')
 
         if tipo_usuario == 'farmacia':
             if not telefono or not str(telefono).strip():
@@ -120,6 +148,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             if not matricula or not str(matricula).strip():
                 raise serializers.ValidationError({
                     'matricula': 'Las farmacias deben proporcionar un número de matrícula.'
+                })
+        
+        # Validar que cliente y repartidor tengan DNI
+        if tipo_usuario in ['cliente', 'repartidor']:
+            if not dni or not str(dni).strip():
+                raise serializers.ValidationError({
+                    'dni': 'El DNI es obligatorio para clientes y repartidores.'
                 })
 
         return attrs

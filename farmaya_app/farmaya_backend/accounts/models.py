@@ -52,6 +52,7 @@ class User(AbstractUser):
 
     tipo_usuario = models.CharField(max_length=20, choices=TIPOS_USUARIO, default="cliente")
     nombre = models.CharField(max_length=100, blank=True)
+    dni = models.CharField(max_length=10, blank=True, null=True, unique=True, verbose_name="DNI")
     direccion = models.CharField(max_length=255, blank=True, null=True)
     telefono = models.CharField(max_length=20, blank=True, null=True)
     horarios = models.CharField(max_length=100, blank=True, null=True)
@@ -107,6 +108,7 @@ class Pedido(models.Model):
         ("aprobado", "Aprobado"),
         ("enviado", "Enviado"),
         ("entregado", "Entregado"),
+        ("no_entregado", "No entregado"),
         ("cancelado", "Cancelado"),
     ]
 
@@ -145,6 +147,7 @@ class Pedido(models.Model):
 
     fecha = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default="pendiente")
+    motivo_no_entrega = models.TextField(blank=True, null=True, verbose_name="Motivo de no entrega")
 
     def __str__(self):
         return f"Pedido de {self.usuario.email} - {self.producto.nombre}"

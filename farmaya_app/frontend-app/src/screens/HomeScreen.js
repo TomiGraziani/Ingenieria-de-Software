@@ -44,6 +44,7 @@ const STATUS_RANK = {
   entregado: 3,
   recibido: 3,
   completado: 3,
+  no_entregado: 3, // Mismo rango que entregado, comparten el 4to paso
 };
 
 const CANCELED_STATES = new Set(['cancelado', 'rechazado']);
@@ -116,6 +117,7 @@ const normalizeOrderFromApi = (order) => {
       productosResumen || order.producto_nombre || order.productoNombre || 'Pedido',
     farmaciaNombre: order.farmacia_nombre || order.farmaciaNombre || order.farmacia || '',
     farmacia: order.farmacia_nombre || order.farmacia || order.farmaciaNombre || '',
+    motivo_no_entrega: order.motivo_no_entrega || order.motivoNoEntrega || '',
     createdAt: order.fecha || order.createdAt || order.created_at || new Date().toISOString(),
     detalles: detallesFiltrados, // Incluir detalles filtrados en el objeto normalizado
   };
@@ -123,6 +125,9 @@ const normalizeOrderFromApi = (order) => {
 
 const normalizeStatus = (status) => {
   const value = (status || '').toString().trim().toLowerCase();
+  if (value === 'no_entregado' || value === 'no entregado') {
+    return 'no_entregado';
+  }
   const map = {
     pendiente: 'creado',
     creado: 'creado',
@@ -153,6 +158,7 @@ const isActiveStatus = (status) => {
     'rechazado',
     'completado',
     'finalizado',
+    'no_entregado',
   ].includes(value);
 };
 
@@ -205,6 +211,8 @@ export default function HomeScreen({ navigation }) {
   const lastRejectedAlertId = useRef(null);
   const [rejectedRecetaModal, setRejectedRecetaModal] = useState(null);
   const [recetaReenviando, setRecetaReenviando] = useState(false);
+  const [noEntregadoOrder, setNoEntregadoOrder] = useState(null);
+  const [noEntregadoModalVisible, setNoEntregadoModalVisible] = useState(false);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -273,8 +281,44 @@ export default function HomeScreen({ navigation }) {
         );
 
       setOrdersCount(sorted.length);
-      const running = sorted.find((order) => isActiveStatus(order.estado));
+      // Buscar pedidos activos (excluyendo no_entregado ya que es un estado final)
+      const running = sorted.find((order) => {
+        const estado = (order?.estado || '').toString().toLowerCase();
+        return isActiveStatus(estado);
+      });
       setActiveOrder(running || null);
+
+      // Buscar pedidos no entregados (para mostrar el modal solo si no se cerró antes para este pedido)
+      const noEntregado = sorted.find(
+        (order) => (order?.estado || '').toString().toLowerCase() === 'no_entregado'
+      );
+      if (noEntregado) {
+        const noEntregadoId = noEntregado.id?.toString();
+        // Verificar en AsyncStorage si este pedido ya fue cerrado
+        try {
+          const closedOrdersKey = await getClienteOrdersStorageKey();
+          const closedOrdersStorageKey = `${closedOrdersKey}_closed_no_entregado`;
+          const closedOrdersStr = await AsyncStorage.getItem(closedOrdersStorageKey);
+          const closedOrders = closedOrdersStr ? JSON.parse(closedOrdersStr) : [];
+          const isClosed = Array.isArray(closedOrders) && closedOrders.includes(noEntregadoId);
+
+          if (!isClosed) {
+            setNoEntregadoOrder(noEntregado);
+            setNoEntregadoModalVisible(true);
+          } else {
+            setNoEntregadoOrder(null);
+            setNoEntregadoModalVisible(false);
+          }
+        } catch (error) {
+          console.error('Error verificando pedidos cerrados:', error);
+          // Si hay error, mostrar el modal por seguridad
+          setNoEntregadoOrder(noEntregado);
+          setNoEntregadoModalVisible(true);
+        }
+      } else {
+        setNoEntregadoOrder(null);
+        setNoEntregadoModalVisible(false);
+      }
 
       // Buscar recetas rechazadas pendientes de acción del cliente
       const pedidosConRecetasRechazadas = sorted.filter((order) => {
@@ -381,9 +425,12 @@ export default function HomeScreen({ navigation }) {
   }, [loadOrders]);
 
   const hasActiveOrder = Boolean(activeOrder);
+  const rawStatus = hasActiveOrder ? (activeOrder?.estado || '').toString().toLowerCase() : null;
   const activeStatus = hasActiveOrder ? normalizeStatus(activeOrder?.estado) : null;
-  const currentStepIndex = hasActiveOrder
-    ? Math.max(ORDER_STEPS.findIndex((step) => step.key === activeStatus), 0)
+  // Si el estado es "no_entregado", mapearlo a "entregado" para mostrar en el 4to paso
+  const displayStatus = rawStatus === 'no_entregado' ? 'entregado' : activeStatus;
+  const currentStepIndex = hasActiveOrder && displayStatus
+    ? Math.max(ORDER_STEPS.findIndex((step) => step.key === displayStatus), 0)
     : -1;
 
   // Una etapa está completada si su índice es menor o igual al índice de la etapa actual
@@ -553,6 +600,87 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <Modal
+        visible={noEntregadoModalVisible && noEntregadoOrder !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={async () => {
+          const orderId = noEntregadoOrder?.id?.toString();
+          setNoEntregadoModalVisible(false);
+          setNoEntregadoOrder(null);
+
+          // Guardar en AsyncStorage que este pedido fue cerrado
+          if (orderId) {
+            try {
+              const storageKey = await getClienteOrdersStorageKey();
+              const closedOrdersStorageKey = `${storageKey}_closed_no_entregado`;
+              const closedOrdersStr = await AsyncStorage.getItem(closedOrdersStorageKey);
+              const closedOrders = closedOrdersStr ? JSON.parse(closedOrdersStr) : [];
+              if (!Array.isArray(closedOrders)) {
+                await AsyncStorage.setItem(closedOrdersStorageKey, JSON.stringify([orderId]));
+              } else if (!closedOrders.includes(orderId)) {
+                closedOrders.push(orderId);
+                await AsyncStorage.setItem(closedOrdersStorageKey, JSON.stringify(closedOrders));
+              }
+            } catch (error) {
+              console.error('Error guardando pedido cerrado:', error);
+            }
+          }
+
+          // Asegurar que activeOrder no incluya el pedido no_entregado
+          setActiveOrder((prev) => {
+            if (prev && (prev.estado || '').toString().toLowerCase() === 'no_entregado') {
+              return null;
+            }
+            return prev;
+          });
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.noEntregadoModalContent}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={async () => {
+                const orderId = noEntregadoOrder?.id?.toString();
+                setNoEntregadoModalVisible(false);
+                setNoEntregadoOrder(null);
+
+                // Guardar en AsyncStorage que este pedido fue cerrado
+                if (orderId) {
+                  try {
+                    const storageKey = await getClienteOrdersStorageKey();
+                    const closedOrdersStorageKey = `${storageKey}_closed_no_entregado`;
+                    const closedOrdersStr = await AsyncStorage.getItem(closedOrdersStorageKey);
+                    const closedOrders = closedOrdersStr ? JSON.parse(closedOrdersStr) : [];
+                    if (!Array.isArray(closedOrders)) {
+                      await AsyncStorage.setItem(closedOrdersStorageKey, JSON.stringify([orderId]));
+                    } else if (!closedOrders.includes(orderId)) {
+                      closedOrders.push(orderId);
+                      await AsyncStorage.setItem(closedOrdersStorageKey, JSON.stringify(closedOrders));
+                    }
+                  } catch (error) {
+                    console.error('Error guardando pedido cerrado:', error);
+                  }
+                }
+
+                // Asegurar que activeOrder no incluya el pedido no_entregado
+                setActiveOrder((prev) => {
+                  if (prev && (prev.estado || '').toString().toLowerCase() === 'no_entregado') {
+                    return null;
+                  }
+                  return prev;
+                });
+              }}
+            >
+              <Text style={styles.modalCloseButtonText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.noEntregadoModalTitle}>❌ Producto no fue entregado</Text>
+            <Text style={styles.noEntregadoModalMotivo}>
+              Motivo: {noEntregadoOrder?.motivo_no_entrega || 'No se especificó motivo'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {activeOrder ? (
           <View style={styles.progressCard}>
@@ -563,7 +691,12 @@ export default function HomeScreen({ navigation }) {
             </Text>
             <View style={styles.stepsWrapper}>
               {ORDER_STEPS.map((step, index) => {
-                const isCurrent = step.key === activeStatus;
+                // Si es el último paso (entregado) y el estado real es "no_entregado", mostrar "No Entregado"
+                const isLastStep = index === ORDER_STEPS.length - 1;
+                const isNoEntregado = rawStatus === 'no_entregado';
+                const stepLabel = isLastStep && isNoEntregado ? 'No Entregado' : step.label;
+
+                const isCurrent = step.key === displayStatus;
                 const isCompleted = isStepCompleted(index);
                 const isReached = isCompleted || isCurrent;
                 return (
@@ -574,6 +707,7 @@ export default function HomeScreen({ navigation }) {
                           styles.stepCircle,
                           isCompleted && styles.stepCircleCompleted,
                           isCurrent && styles.stepCircleCurrent,
+                          isNoEntregado && isLastStep && isCurrent && { borderColor: '#D32F2F', backgroundColor: '#D32F2F' },
                         ]}
                       >
                         <Text
@@ -600,9 +734,10 @@ export default function HomeScreen({ navigation }) {
                       style={[
                         styles.stepLabel,
                         (isCompleted || isCurrent) && styles.stepLabelActive,
+                        isNoEntregado && isLastStep && isCurrent && { color: '#D32F2F' },
                       ]}
                     >
-                      {step.label}
+                      {stepLabel}
                     </Text>
                   </View>
                 );
@@ -818,6 +953,74 @@ const createStyles = (theme, insets) => {
       textAlign: 'center',
       color: theme.colors.text,
       fontWeight: '600',
+    },
+    noEntregadoBanner: {
+      backgroundColor: '#FFEBEE',
+      borderLeftWidth: 4,
+      borderLeftColor: '#D32F2F',
+      padding: 16,
+      marginBottom: 16,
+      borderRadius: 8,
+      marginHorizontal: 20,
+      marginTop: 8,
+    },
+    noEntregadoTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#D32F2F',
+      marginBottom: 8,
+    },
+    noEntregadoMotivo: {
+      fontSize: 14,
+      color: '#666',
+      lineHeight: 20,
+    },
+    noEntregadoModalContent: {
+      backgroundColor: '#FFEBEE',
+      borderRadius: 20,
+      padding: 24,
+      width: '85%',
+      maxWidth: 400,
+      borderWidth: 2,
+      borderColor: '#D32F2F',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 15,
+      position: 'relative',
+    },
+    modalCloseButton: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#D32F2F',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1,
+    },
+    modalCloseButtonText: {
+      color: '#FFFFFF',
+      fontSize: 20,
+      fontWeight: 'bold',
+      lineHeight: 20,
+    },
+    noEntregadoModalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#D32F2F',
+      marginBottom: 16,
+      marginTop: 8,
+      textAlign: 'center',
+    },
+    noEntregadoModalMotivo: {
+      fontSize: 16,
+      color: '#333',
+      lineHeight: 24,
+      textAlign: 'center',
     },
     actionBadge: {
       marginTop: 8,

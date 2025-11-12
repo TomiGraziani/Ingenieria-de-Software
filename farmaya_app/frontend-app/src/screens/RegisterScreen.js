@@ -23,6 +23,7 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rol, setRol] = useState('cliente');
+  const [dni, setDni] = useState('');
   const [direccion, setDireccion] = useState('');
   const [horarios, setHorarios] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -36,6 +37,19 @@ export default function RegisterScreen({ navigation }) {
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validateTelefono = (value) => /^(\+?\d[\d\s-]{6,})$/.test(value.trim());
+
+  // Función para validar DNI (solo números, 7, 8 o 10 dígitos)
+  const validateDNI = (value) => {
+    const dniLimpio = value.replace(/\D/g, ''); // Solo números
+    return dniLimpio.length === 7 || dniLimpio.length === 8 || dniLimpio.length === 10;
+  };
+
+  // Función para formatear DNI (solo permite números)
+  const validarDNI = (texto) => {
+    // Remover todo lo que no sea número
+    const soloNumeros = texto.replace(/\D/g, '');
+    return soloNumeros;
+  };
 
   // Función para validar que solo contenga letras y espacios en blanco
   const validarNombre = (texto, textoAnterior) => {
@@ -92,6 +106,20 @@ export default function RegisterScreen({ navigation }) {
       }
     }
 
+    // Validar DNI para cliente y repartidor
+    if (rol === 'cliente' || rol === 'repartidor') {
+      if (!dni.trim()) {
+        Alert.alert('Error', 'El DNI es obligatorio.');
+        return;
+      }
+
+      const dniLimpio = dni.replace(/\D/g, '');
+      if (!validateDNI(dni)) {
+        Alert.alert('Error', 'El DNI debe tener 7, 8 o 10 dígitos.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -102,6 +130,12 @@ export default function RegisterScreen({ navigation }) {
         direccion,
         horarios,
       };
+
+      // Agregar DNI para cliente y repartidor
+      if (rol === 'cliente' || rol === 'repartidor') {
+        const dniLimpio = dni.replace(/\D/g, '');
+        payload.dni = dniLimpio;
+      }
 
       const trimmedPhone = telefono.trim();
       if (trimmedPhone) {
@@ -195,7 +229,13 @@ export default function RegisterScreen({ navigation }) {
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={rol}
-              onValueChange={(itemValue) => setRol(itemValue)}
+              onValueChange={(itemValue) => {
+                setRol(itemValue);
+                // Limpiar DNI cuando cambia a farmacia
+                if (itemValue === 'farmacia') {
+                  setDni('');
+                }
+              }}
               dropdownIconColor={theme.colors.accent}
               style={styles.picker}
             >
@@ -204,6 +244,24 @@ export default function RegisterScreen({ navigation }) {
               <Picker.Item label="Repartidor" value="repartidor" />
             </Picker>
           </View>
+
+          {(rol === 'cliente' || rol === 'repartidor') && (
+            <View>
+              <Text style={styles.label}>DNI *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingresá tu DNI (7, 8 o 10 dígitos)"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="numeric"
+                value={dni}
+                onChangeText={(text) => {
+                  const dniValidado = validarDNI(text);
+                  setDni(dniValidado);
+                }}
+                maxLength={10}
+              />
+            </View>
+          )}
 
           {rol === 'farmacia' && (
             <>

@@ -40,6 +40,8 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pedidoProcesando, setPedidoProcesando] = useState(null);
+  const [noEntregadoPedido, setNoEntregadoPedido] = useState(null);
+  const [noEntregadoModalVisible, setNoEntregadoModalVisible] = useState(false);
 
   // Modal de edición
   const [modalVisible, setModalVisible] = useState(false);
@@ -100,6 +102,7 @@ export default function HomeFarmaciaScreen({ navigation }) {
       estado: pedido.estado,
       puedeAceptar: pedido.puede_aceptar,
       farmaciaNombre: pedido.farmacia_nombre,
+      motivo_no_entrega: pedido.motivo_no_entrega,
       detalles,
     };
   };
@@ -123,6 +126,17 @@ export default function HomeFarmaciaScreen({ navigation }) {
       });
 
       setPedidos(pendientes);
+
+      // Buscar pedidos no entregados
+      const noEntregado = pedidosNormalizados.find(
+        (pedido) => (pedido?.estado || "").toString().toLowerCase() === "no_entregado"
+      );
+      if (noEntregado) {
+        setNoEntregadoPedido(noEntregado);
+        setNoEntregadoModalVisible(true);
+      } else {
+        setNoEntregadoPedido(null);
+      }
     } catch (error) {
       console.error("❌ Error al cargar pedidos:", error.response?.data || error);
     }
@@ -580,6 +594,27 @@ export default function HomeFarmaciaScreen({ navigation }) {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
+      <Modal
+        visible={noEntregadoModalVisible && noEntregadoPedido !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setNoEntregadoModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.noEntregadoModalContent}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setNoEntregadoModalVisible(false)}
+            >
+              <Text style={styles.modalCloseButtonText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.noEntregadoModalTitle}>❌ Producto no fue entregado</Text>
+            <Text style={styles.noEntregadoModalMotivo}>
+              Motivo: {noEntregadoPedido?.motivo_no_entrega || 'No se especificó motivo'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.section}>
         <Text style={styles.title}>🏥 {farmacia?.nombre}</Text>
         <Text style={styles.info}>📍 {farmacia?.direccion}</Text>
@@ -845,6 +880,74 @@ const createStyles = (theme, insets) => {
   const bottomInset = insets?.bottom ?? 0;
 
   return StyleSheet.create({
+    noEntregadoBanner: {
+      backgroundColor: '#FFEBEE',
+      borderLeftWidth: 4,
+      borderLeftColor: '#D32F2F',
+      padding: 16,
+      marginBottom: 16,
+      borderRadius: 8,
+      marginHorizontal: 20,
+      marginTop: 8,
+    },
+    noEntregadoTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#D32F2F',
+      marginBottom: 8,
+    },
+    noEntregadoMotivo: {
+      fontSize: 14,
+      color: '#666',
+      lineHeight: 20,
+    },
+    noEntregadoModalContent: {
+      backgroundColor: '#FFEBEE',
+      borderRadius: 20,
+      padding: 24,
+      width: '85%',
+      maxWidth: 400,
+      borderWidth: 2,
+      borderColor: '#D32F2F',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 15,
+      position: 'relative',
+    },
+    modalCloseButton: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#D32F2F',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1,
+    },
+    modalCloseButtonText: {
+      color: '#FFFFFF',
+      fontSize: 20,
+      fontWeight: 'bold',
+      lineHeight: 20,
+    },
+    noEntregadoModalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#D32F2F',
+      marginBottom: 16,
+      marginTop: 8,
+      textAlign: 'center',
+    },
+    noEntregadoModalMotivo: {
+      fontSize: 16,
+      color: '#333',
+      lineHeight: 24,
+      textAlign: 'center',
+    },
     safeArea: { flex: 1, backgroundColor: theme.colors.background },
     listContent: {
       paddingHorizontal: 20,

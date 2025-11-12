@@ -58,6 +58,7 @@ class PedidoSerializer(serializers.ModelSerializer):
             'metodo_pago',
             'fecha',
             'estado',
+            'motivo_no_entrega',
             'detalles',
             'puede_aceptar',
         ]

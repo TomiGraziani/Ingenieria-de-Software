@@ -256,24 +256,43 @@ class ActualizarEstadoPedidoView(APIView):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-        # Los repartidores solo pueden actualizar a 'en_camino' o 'entregado'
+        # Los repartidores solo pueden actualizar a 'en_camino', 'entregado' o 'no_entregado'
         elif request.user.tipo_usuario == 'repartidor':
-            if nuevo_estado not in ['en_camino', 'entregado']:
+            if nuevo_estado not in ['en_camino', 'entregado', 'no_entregado']:
                 return Response(
-                    {'detail': 'Los repartidores solo pueden actualizar el estado a "en_camino" o "entregado".'},
+                    {'detail': 'Los repartidores solo pueden actualizar el estado a "en_camino", "entregado" o "no_entregado".'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            # Solo pueden actualizar si el pedido está aceptado o en preparación
-            if pedido.estado not in ['aceptado', 'en_preparacion', 'en_camino']:
-                return Response(
-                    {'detail': 'Solo podés actualizar pedidos que estén aceptados o en preparación.'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            # Solo pueden actualizar si el pedido está en_camino (ya retirado de la farmacia)
+            if nuevo_estado in ['entregado', 'no_entregado']:
+                if pedido.estado not in ['en_camino']:
+                    return Response(
+                        {'detail': 'Solo podés marcar como entregado o no entregado pedidos que estén en camino.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            # Para marcar como en_camino, el pedido debe estar aceptado o en preparación
+            elif nuevo_estado == 'en_camino':
+                if pedido.estado not in ['aceptado', 'en_preparacion']:
+                    return Response(
+                        {'detail': 'Solo podés marcar como en camino pedidos que estén aceptados o en preparación.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
         else:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
+        # Actualizar estado
         pedido.estado = nuevo_estado
-        pedido.save(update_fields=['estado'])
+        
+        # Si el estado es 'no_entregado', guardar el motivo
+        if nuevo_estado == 'no_entregado':
+            motivo_no_entrega = request.data.get('motivo_no_entrega', '')
+            if motivo_no_entrega:
+                pedido.motivo_no_entrega = motivo_no_entrega
+                pedido.save(update_fields=['estado', 'motivo_no_entrega'])
+            else:
+                pedido.save(update_fields=['estado'])
+        else:
+            pedido.save(update_fields=['estado'])
 
         serializer = PedidoSerializer(pedido, context={'request': request})
         return Response(serializer.data)

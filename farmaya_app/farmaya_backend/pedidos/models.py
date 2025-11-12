@@ -10,6 +10,7 @@ class Pedido(models.Model):
         ('en_preparacion', 'En preparación'),
         ('en_camino', 'En camino'),
         ('entregado', 'Entregado'),
+        ('no_entregado', 'No entregado'),
         ('cancelado', 'Cancelado'),
     ]
 
@@ -28,6 +29,7 @@ class Pedido(models.Model):
     metodo_pago = models.CharField(max_length=50)
     fecha = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=50, choices=ESTADOS, default='pendiente')
+    motivo_no_entrega = models.TextField(blank=True, null=True, verbose_name="Motivo de no entrega")
 
     def __str__(self):
         return f"Pedido #{self.id} - {self.farmacia.nombre} ({self.estado})"

@@ -17,6 +17,7 @@ const ESTADO_LABEL = {
   aceptado: "Pedido aceptado",
   en_camino: "En camino",
   entregado: "Entregado",
+  no_entregado: "No entregado",
   rechazado: "Pedido rechazado",
 };
 
@@ -36,6 +37,8 @@ const normalizeEstado = (estado) => {
     entregado: "entregado",
     recibido: "entregado",
     completado: "entregado",
+    no_entregado: "no_entregado",
+    "no entregado": "no_entregado",
     cancelado: "rechazado",
     rechazado: "rechazado",
   };
@@ -98,7 +101,7 @@ export default function VentasFarmaciaScreen({ navigation }) {
             fecha: order?.createdAt || order?.fecha || order?.updatedAt,
           };
 
-          if (["aceptado", "en_camino", "entregado"].includes(estadoNormalizado)) {
+          if (["aceptado", "en_camino", "entregado", "no_entregado"].includes(estadoNormalizado)) {
             accepted.push(registro);
           } else if (estadoNormalizado === "rechazado") {
             rejected.push(registro);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
@@ -178,12 +179,12 @@ export default function HomeRepartidorScreen({ navigation }) {
     const updated = pedidos.map(p =>
       p.id === id
         ? {
-            ...p,
-            estado: "asignado",
-            repartidor,
-            direccionFarmacia: getDireccionFarmacia(p),
-            direccionCliente: getDireccionCliente(p),
-          }
+          ...p,
+          estado: "asignado",
+          repartidor,
+          direccionFarmacia: getDireccionFarmacia(p),
+          direccionCliente: getDireccionCliente(p),
+        }
         : p
     );
 
@@ -232,30 +233,33 @@ export default function HomeRepartidorScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>🚚 Pedidos Disponibles</Text>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.header}>🚚 Pedidos Disponibles</Text>
 
-      {pedidosDisponibles.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No hay pedidos pendientes por ahora</Text>
-          <Text style={styles.emptySubtitle}>
-            Cuando una farmacia confirme un pedido lo vas a ver en esta lista.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={pedidosDisponibles.sort((a, b) => a.distancia - b.distancia)}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-        />
-      )}
-    </View>
+        {pedidosDisponibles.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No hay pedidos pendientes por ahora</Text>
+            <Text style={styles.emptySubtitle}>
+              Cuando una farmacia confirme un pedido lo vas a ver en esta lista.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={pedidosDisponibles.sort((a, b) => a.distancia - b.distancia)}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+          />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#fff" },
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  header: { fontSize: 22, fontWeight: "700", marginBottom: 12 },
+  header: { fontSize: 22, fontWeight: "700", marginBottom: 12, marginTop: 8 },
   card: { padding: 14, backgroundColor: "#f9f9f9", borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: "#ddd" },
   title: { fontSize: 18, fontWeight: "600" },
   buttons: { flexDirection: "row", marginTop: 10, gap: 10 },

@@ -20,6 +20,7 @@ const ESTADO_LABEL = {
   en_preparacion: "En preparación",
   en_camino: "En camino",
   entregado: "Entregado",
+  no_entregado: "No entregado",
   cancelado: "Cancelado",
 };
 
@@ -35,6 +36,8 @@ const estadoColor = (estado) => {
       return "#FF8F00";
     case "entregado":
       return "#6D4C41";
+    case "no_entregado":
+      return "#D32F2F";
     case "rechazado":
     case "cancelado":
       return "#C62828";
@@ -153,7 +156,7 @@ export default function MisPedidosScreen({ navigation }) {
     if (!detalles || !Array.isArray(detalles)) return [];
 
     // Si el pedido está aceptado o en un estado avanzado, filtrar detalles
-    const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado'];
+    const estadosAvanzados = ['aceptado', 'en_preparacion', 'en_camino', 'entregado', 'no_entregado'];
     const estadoNormalizado = (estadoPedido || '').toString().toLowerCase();
 
     if (estadosAvanzados.includes(estadoNormalizado)) {
