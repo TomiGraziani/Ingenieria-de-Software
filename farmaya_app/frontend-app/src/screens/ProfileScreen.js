@@ -17,7 +17,7 @@ export default function ProfileScreen() {
         return;
       }
 
-    const response = await API.get('usuarios/me/', {
+      const response = await API.get('usuarios/me/', {
 
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -34,7 +34,27 @@ export default function ProfileScreen() {
     loadUser();
   }, []);
 
+  // Función para validar que solo contenga letras y espacios en blanco
+  const validarNombre = (texto, textoAnterior) => {
+    // Detecta si se intentó ingresar un número u otro carácter no válido
+    const tieneNumerosOCaracteresEspeciales = /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(texto);
+
+    if (tieneNumerosOCaracteresEspeciales) {
+      Alert.alert('Error', 'No se admiten numeros en el nombre ingrese un nombre valido');
+      // Mantener el texto anterior (sin los números)
+      return textoAnterior || '';
+    }
+
+    // Si es válido, permitir el cambio
+    return texto;
+  };
+
   const handleChange = (key, value) => {
+    // Si es el campo nombre, aplicar validación
+    if (key === 'nombre') {
+      const nombreAnterior = user?.nombre || '';
+      value = validarNombre(value, nombreAnterior);
+    }
     setUser({ ...user, [key]: value });
   };
 
@@ -52,7 +72,36 @@ export default function ProfileScreen() {
       Alert.alert('✅ Éxito', 'Perfil actualizado correctamente.');
     } catch (error) {
       console.error('Error al guardar perfil:', error.response?.data || error);
-      Alert.alert('Error', 'No se pudo guardar el perfil.');
+
+      // Extraer mensaje de error del backend
+      let errorMessage = 'No se pudo guardar el perfil.';
+
+      if (error.response?.data) {
+        const errorData = error.response.data;
+
+        // Buscar mensajes de error en diferentes campos
+        if (errorData.email && Array.isArray(errorData.email)) {
+          errorMessage = errorData.email[0];
+        } else if (errorData.nombre && Array.isArray(errorData.nombre)) {
+          errorMessage = errorData.nombre[0];
+        } else if (errorData.telefono && Array.isArray(errorData.telefono)) {
+          errorMessage = errorData.telefono[0];
+        } else if (typeof errorData === 'object') {
+          // Si es un objeto con múltiples campos, tomar el primer mensaje
+          const firstKey = Object.keys(errorData)[0];
+          if (firstKey && Array.isArray(errorData[firstKey])) {
+            errorMessage = errorData[firstKey][0];
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          }
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        }
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -78,6 +127,7 @@ export default function ProfileScreen() {
         value={user.nombre || ''}
         onChangeText={(text) => handleChange('nombre', text)}
         placeholder="Nombre"
+        autoCapitalize="words"
       />
 
       <TextInput

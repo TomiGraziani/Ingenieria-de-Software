@@ -22,6 +22,21 @@ export default function AgregarProductoScreen({ navigation }) {
   const [requiereReceta, setRequiereReceta] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Función para validar que solo contenga letras y espacios en blanco
+  const validarNombreProducto = (texto, textoAnterior) => {
+    // Detecta si se intentó ingresar un número u otro carácter no válido
+    const tieneNumerosOCaracteresEspeciales = /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(texto);
+
+    if (tieneNumerosOCaracteresEspeciales) {
+      Alert.alert('Error', 'No se admiten numeros en el nombre ingrese un nombre valido');
+      // Mantener el texto anterior (sin los números)
+      return textoAnterior || '';
+    }
+
+    // Si es válido, permitir el cambio
+    return texto;
+  };
+
   // 🔹 Validaciones y envío
   const handleGuardarProducto = async () => {
     if (!nombre.trim() || !precio.trim() || !stock.trim() || !presentacion.trim()) {
@@ -42,8 +57,8 @@ export default function AgregarProductoScreen({ navigation }) {
 
       console.log("✅ Producto creado:", response.data);
       Alert.alert("✅ Éxito", "Producto agregado correctamente.", [
-        { 
-          text: "OK", 
+        {
+          text: "OK",
           onPress: () => {
             // Volver a la pantalla anterior, useFocusEffect se encargará de refrescar
             navigation.goBack();
@@ -69,55 +84,59 @@ export default function AgregarProductoScreen({ navigation }) {
       <ScrollView style={styles.scrollView}>
         <Text style={styles.title}>🧾 Nuevo producto</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Nombre del producto"
-        value={nombre}
-        onChangeText={setNombre}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Nombre del producto"
+          value={nombre}
+          onChangeText={(text) => {
+            const nombreValidado = validarNombreProducto(text, nombre);
+            setNombre(nombreValidado);
+          }}
+          autoCapitalize="words"
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Presentación (ej: 500 mg, 200 ml)"
-        value={presentacion}
-        onChangeText={setPresentacion}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Presentación (ej: 500 mg, 200 ml)"
+          value={presentacion}
+          onChangeText={setPresentacion}
+        />
 
-      <TextInput
-        style={[styles.input, { height: 80 }]}
-        placeholder="Descripción"
-        value={descripcion}
-        onChangeText={setDescripcion}
-        multiline
-      />
+        <TextInput
+          style={[styles.input, { height: 80 }]}
+          placeholder="Descripción"
+          value={descripcion}
+          onChangeText={setDescripcion}
+          multiline
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Precio"
-        keyboardType="numeric"
-        value={precio}
-        onChangeText={setPrecio}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Precio"
+          keyboardType="numeric"
+          value={precio}
+          onChangeText={setPrecio}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Stock disponible"
-        keyboardType="numeric"
-        value={stock}
-        onChangeText={setStock}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Stock disponible"
+          keyboardType="numeric"
+          value={stock}
+          onChangeText={setStock}
+        />
 
-      <View style={styles.switchContainer}>
-        <Text style={{ fontSize: 16 }}>¿Requiere receta?</Text>
-        <Switch value={requiereReceta} onValueChange={setRequiereReceta} />
-      </View>
+        <View style={styles.switchContainer}>
+          <Text style={{ fontSize: 16 }}>¿Requiere receta?</Text>
+          <Switch value={requiereReceta} onValueChange={setRequiereReceta} />
+        </View>
 
-      <Button
-        title={loading ? "Guardando..." : "Guardar producto"}
-        color="#1E88E5"
-        onPress={handleGuardarProducto}
-        disabled={loading}
-      />
+        <Button
+          title={loading ? "Guardando..." : "Guardar producto"}
+          color="#1E88E5"
+          onPress={handleGuardarProducto}
+          disabled={loading}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );

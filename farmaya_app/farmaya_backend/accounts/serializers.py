@@ -1,3 +1,4 @@
+import re
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import get_user_model
@@ -21,6 +22,36 @@ class UserSerializer(serializers.ModelSerializer):
             'horarios', 'latitud', 'longitud', 'matricula'
         ]
         extra_kwargs = {'password': {'write_only': True}}
+
+    def validate_nombre(self, value):
+        """Valida que el nombre solo contenga letras y espacios en blanco."""
+        if value and value.strip():
+            # Permite letras (incluyendo acentos) y espacios
+            if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$', value):
+                raise serializers.ValidationError(
+                    'No se admiten numeros en el nombre ingrese un nombre valido'
+                )
+            # Validar si el nombre ya está en uso (solo en create, no en update)
+            # En update se valida en el método validate para excluir el usuario actual
+            if self.instance is None:  # Solo validar en create
+                nombre_normalizado = value.strip()
+                if User.objects.filter(nombre__iexact=nombre_normalizado).exists():
+                    raise serializers.ValidationError(
+                        'Ya existe un/a usuario con este/a nombre.'
+                    )
+        return value
+
+    def validate(self, attrs):
+        """Validación adicional para update: verificar nombre duplicado excluyendo el usuario actual."""
+        if self.instance and 'nombre' in attrs:
+            nombre_nuevo = attrs.get('nombre', '').strip()
+            if nombre_nuevo:
+                # Verificar si otro usuario (diferente al actual) tiene ese nombre
+                if User.objects.filter(nombre__iexact=nombre_nuevo).exclude(pk=self.instance.pk).exists():
+                    raise serializers.ValidationError({
+                        'nombre': ['Ya existe un/a usuario con este/a nombre.']
+                    })
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -57,8 +88,24 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         normalized_email = value.lower()
         if User.objects.filter(email__iexact=normalized_email).exists():
-            raise serializers.ValidationError('Ese correo ya se encuentra en uso.')
+            raise serializers.ValidationError('Ya existe un/a usuario con este/a Correo electrónico.')
         return normalized_email
+
+    def validate_nombre(self, value):
+        """Valida que el nombre solo contenga letras y espacios en blanco."""
+        if value and value.strip():
+            # Permite letras (incluyendo acentos) y espacios
+            if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$', value):
+                raise serializers.ValidationError(
+                    'No se admiten numeros en el nombre ingrese un nombre valido'
+                )
+            # Validar si el nombre ya está en uso
+            nombre_normalizado = value.strip()
+            if User.objects.filter(nombre__iexact=nombre_normalizado).exists():
+                raise serializers.ValidationError(
+                    'Ya existe un/a usuario con este/a nombre.'
+                )
+        return value
 
     def validate(self, attrs):
         tipo_usuario = attrs.get('tipo_usuario')

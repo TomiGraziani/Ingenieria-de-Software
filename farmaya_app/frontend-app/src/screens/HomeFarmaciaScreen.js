@@ -317,6 +317,21 @@ export default function HomeFarmaciaScreen({ navigation }) {
     ]);
   };
 
+  // Función para validar que solo contenga letras y espacios en blanco
+  const validarNombreProducto = (texto, textoAnterior) => {
+    // Detecta si se intentó ingresar un número u otro carácter no válido
+    const tieneNumerosOCaracteresEspeciales = /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(texto);
+
+    if (tieneNumerosOCaracteresEspeciales) {
+      Alert.alert('Error', 'No se admiten numeros en el nombre ingrese un nombre valido');
+      // Mantener el texto anterior (sin los números)
+      return textoAnterior || '';
+    }
+
+    // Si es válido, permitir el cambio
+    return texto;
+  };
+
   // 🔹 Abrir modal de edición
   const abrirEdicion = (producto) => {
     setProductoEdit(producto);
@@ -769,8 +784,12 @@ export default function HomeFarmaciaScreen({ navigation }) {
             <TextInput
               style={styles.input}
               value={nombre}
-              onChangeText={setNombre}
+              onChangeText={(text) => {
+                const nombreValidado = validarNombreProducto(text, nombre);
+                setNombre(nombreValidado);
+              }}
               placeholder="Nombre"
+              autoCapitalize="words"
             />
             <TextInput
               style={styles.input}

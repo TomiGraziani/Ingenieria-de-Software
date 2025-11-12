@@ -33,6 +33,21 @@ export default function RegisterScreen({ navigation }) {
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validateTelefono = (value) => /^(\+?\d[\d\s-]{6,})$/.test(value.trim());
 
+  // Función para validar que solo contenga letras y espacios en blanco
+  const validarNombre = (texto, textoAnterior) => {
+    // Detecta si se intentó ingresar un número u otro carácter no válido
+    const tieneNumerosOCaracteresEspeciales = /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(texto);
+
+    if (tieneNumerosOCaracteresEspeciales) {
+      Alert.alert('Error', 'No se admiten numeros en el nombre ingrese un nombre valido');
+      // Mantener el texto anterior (sin los números)
+      return textoAnterior || '';
+    }
+
+    // Si es válido, permitir el cambio
+    return texto;
+  };
+
   const handleRegister = async () => {
     if (!nombre || !email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos obligatorios.');
@@ -98,38 +113,47 @@ export default function RegisterScreen({ navigation }) {
 
       console.log('✅ Usuario registrado:', response.data);
 
-      // 🔹 Luego de registrarse, login automático (opcional)
-      const loginResponse = await API.post('login/', { email, password });
-      const { access, refresh } = loginResponse.data;
+      Alert.alert(
+        '✅ Registro exitoso',
+        'Tu cuenta ha sido creada correctamente. Por favor, inicia sesión para continuar.'
+      );
 
-      await AsyncStorage.setItem('accessToken', access);
-      await AsyncStorage.setItem('refreshToken', refresh);
-
-      // 🔹 Obtener datos del usuario recién creado
-      const userResponse = await API.get('usuarios/me/', {
-        headers: { Authorization: `Bearer ${access}` },
-      });
-
-      const user = userResponse.data;
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-
-      Alert.alert('✅ Registro exitoso', 'Sesión iniciada correctamente.');
-
-      // 🔹 Redirigir según tipo de usuario
-      if (user.tipo_usuario === 'farmacia') {
-        navigation.replace('HomeFarmacia');
-      } else if (user.tipo_usuario === 'repartidor') {
-        navigation.replace('HomeRepartidor');
-      } else {
-        navigation.replace('Home');
-      }
+      // 🔹 Redirigir a la pantalla de login
+      navigation.replace('Login');
     } catch (error) {
       console.error('❌ Error al registrar usuario:', error.response?.data || error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.detail ||
-        'No se pudo completar el registro. Intenta nuevamente.'
-      );
+
+      // Extraer mensaje de error del backend
+      let errorMessage = 'No se pudo completar el registro. Intenta nuevamente.';
+
+      if (error.response?.data) {
+        const errorData = error.response.data;
+
+        // Buscar mensajes de error en diferentes campos
+        if (errorData.email && Array.isArray(errorData.email)) {
+          errorMessage = errorData.email[0];
+        } else if (errorData.nombre && Array.isArray(errorData.nombre)) {
+          errorMessage = errorData.nombre[0];
+        } else if (errorData.telefono && Array.isArray(errorData.telefono)) {
+          errorMessage = errorData.telefono[0];
+        } else if (errorData.matricula && Array.isArray(errorData.matricula)) {
+          errorMessage = errorData.matricula[0];
+        } else if (typeof errorData === 'object') {
+          // Si es un objeto con múltiples campos, tomar el primer mensaje
+          const firstKey = Object.keys(errorData)[0];
+          if (firstKey && Array.isArray(errorData[firstKey])) {
+            errorMessage = errorData[firstKey][0];
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          }
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        }
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -152,7 +176,11 @@ export default function RegisterScreen({ navigation }) {
             placeholder="Cómo te llamas"
             placeholderTextColor={theme.colors.textSecondary}
             value={nombre}
-            onChangeText={setNombre}
+            onChangeText={(text) => {
+              const nombreValidado = validarNombre(text, nombre);
+              setNombre(nombreValidado);
+            }}
+            autoCapitalize="words"
           />
 
           <Text style={styles.label}>Email</Text>
