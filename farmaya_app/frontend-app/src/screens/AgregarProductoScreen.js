@@ -1,17 +1,18 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Button,
-  Switch,
   Alert,
-  ScrollView,
+  Button,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import API from "../api/api";
+import { useTheme } from '../theme/ThemeProvider';
 
 export default function AgregarProductoScreen({ navigation }) {
   const [nombre, setNombre] = useState("");
@@ -21,6 +22,8 @@ export default function AgregarProductoScreen({ navigation }) {
   const [stock, setStock] = useState("");
   const [requiereReceta, setRequiereReceta] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
 
   // Función para validar que solo contenga letras y espacios en blanco
   const validarNombreProducto = (texto, textoAnterior) => {
@@ -87,6 +90,7 @@ export default function AgregarProductoScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Nombre del producto"
+          placeholderTextColor={theme.colors.textSecondary}
           value={nombre}
           onChangeText={(text) => {
             const nombreValidado = validarNombreProducto(text, nombre);
@@ -98,6 +102,7 @@ export default function AgregarProductoScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Presentación (ej: 500 mg, 200 ml)"
+          placeholderTextColor={theme.colors.textSecondary}
           value={presentacion}
           onChangeText={setPresentacion}
         />
@@ -105,6 +110,7 @@ export default function AgregarProductoScreen({ navigation }) {
         <TextInput
           style={[styles.input, { height: 80 }]}
           placeholder="Descripción"
+          placeholderTextColor={theme.colors.textSecondary}
           value={descripcion}
           onChangeText={setDescripcion}
           multiline
@@ -113,6 +119,7 @@ export default function AgregarProductoScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Precio"
+          placeholderTextColor={theme.colors.textSecondary}
           keyboardType="numeric"
           value={precio}
           onChangeText={setPrecio}
@@ -121,19 +128,21 @@ export default function AgregarProductoScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Stock disponible"
+          placeholderTextColor={theme.colors.textSecondary}
           keyboardType="numeric"
           value={stock}
           onChangeText={setStock}
         />
 
         <View style={styles.switchContainer}>
-          <Text style={{ fontSize: 16 }}>¿Requiere receta?</Text>
+          <Text style={styles.label}>¿Requiere receta?</Text>
           <Switch value={requiereReceta} onValueChange={setRequiereReceta} />
         </View>
 
         <Button
           title={loading ? "Guardando..." : "Guardar producto"}
-          color="#1E88E5"
+          color= {theme.colors.primary}
+          shadowRadius= {12}
           onPress={handleGuardarProducto}
           disabled={loading}
         />
@@ -143,28 +152,53 @@ export default function AgregarProductoScreen({ navigation }) {
 }
 
 // 🎨 Estilos
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  scrollView: { flex: 1, padding: 20 },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1E88E5",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 25,
-  },
-});
+const createStyles = (theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background, },
+    scrollView: { flex: 1, padding: 20 },
+    title: {
+      fontSize: 24,
+      fontWeight: "bold",
+      color: theme.colors.text,
+      marginBottom: 20,
+      textAlign: "center",
+    },
+    label: {
+      fontSize: 16,
+      color: theme.colors.text,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginBottom: 18,
+      backgroundColor: theme.colors.card,
+      color: theme.colors.text,
+      fontSize: 16,
+    },
+    switchContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 25,
+    },
+    primaryButton: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 14,
+      borderRadius: 16,
+      alignItems: 'center',
+      marginTop: 6,
+      shadowColor: theme.colors.primary,
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 3,
+    },
+    primaryButtonText: {
+      color: theme.colors.buttonText,
+      fontWeight: '700',
+      fontSize: 16,
+    },
+  });

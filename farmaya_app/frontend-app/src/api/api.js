@@ -1,11 +1,12 @@
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { Alert } from "react-native";
 
 // 🌐 Dirección base del backend Django
 // ⚠️ Usá tu IP local (la de tu PC con el backend encendido)
+const BASE_URL = "http://192.168.1.56:8000/api/";
 const API = axios.create({
-  baseURL: "http://192.168.0.7:8000/api/", // ✅ agregado el puerto 8000
+  baseURL: BASE_URL, // ✅ agregado el puerto 8000
   timeout: 10000,
 });
 
@@ -41,7 +42,7 @@ API.interceptors.response.use(
         if (!refreshToken) throw new Error("No hay refresh token almacenado");
 
         // 🔹 Solicita un nuevo access token
-        const response = await axios.post("http://192.168.0.7:8000/api/token/refresh/", {
+        const response = await axios.post(`${BASE_URL}token/refresh/`, { //CAMBIAR POR IP LOCAL
           refresh: refreshToken,
         });
 

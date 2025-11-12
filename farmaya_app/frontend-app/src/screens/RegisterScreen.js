@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { Picker } from '@react-native-picker/picker';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,12 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import API from '../api/api';
-import { useTheme } from '../theme/ThemeProvider';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import API from '../api/api';
 import ErrorModal from '../components/ErrorModal';
+import { useTheme } from '../theme/ThemeProvider';
 import { extractErrorMessage } from '../utils/errorHandler';
 
 export default function RegisterScreen({ navigation }) {
