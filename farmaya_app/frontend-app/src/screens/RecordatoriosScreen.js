@@ -202,13 +202,19 @@ export default function RecordatoriosScreen({ navigation }) {
       ios: {
         allowAlert: true,
         allowSound: true,
+        allowBadge: true,
+      },
+      android: {
+        allowAlert: true,
+        allowSound: true,
+        allowBadge: true,
       },
     });
 
     if (!request.granted) {
       Alert.alert(
         'Permiso requerido',
-        'Necesitamos permiso para enviarte recordatorios programados.'
+        'Necesitamos permiso para enviarte recordatorios programados. Por favor, activá las notificaciones en la configuración de la app.'
       );
       return false;
     }
@@ -274,14 +280,26 @@ export default function RecordatoriosScreen({ navigation }) {
     }
 
     try {
+      // Asegurar que el canal esté configurado en Android
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('recordatorios', {
+          name: 'Recordatorios',
+          description: 'Recordatorios programados por el usuario',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'default',
+          vibrationPattern: [0, 250, 250, 250],
+        });
+      }
+
       const identifier = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Recordatorio de medicación',
           body: normalizedTitle,
           sound: 'default',
+          data: { reminderId: Date.now().toString() },
+          ...(Platform.OS === 'android' && { channelId: 'recordatorios' }),
         },
         trigger: {
-          channelId: 'recordatorios',
           date: selectedDate,
         },
       });
@@ -319,20 +337,45 @@ export default function RecordatoriosScreen({ navigation }) {
 
   const openPicker = useCallback(() => {
     if (Platform.OS === 'android') {
+      // Primero abrir el selector de fecha
       DateTimePickerAndroid.open({
         value: selectedDate,
-        mode: 'datetime',
-        is24Hour: true,
-        onChange: (_event, date) => {
-          if (date) {
-            setSelectedDate(date);
+        mode: 'date',
+        minimumDate: new Date(),
+        onChange: (event, date) => {
+          if (event.type === 'set' && date) {
+            // Guardar la fecha seleccionada temporalmente
+            const newDate = new Date(date);
+            newDate.setHours(selectedDate.getHours());
+            newDate.setMinutes(selectedDate.getMinutes());
+            newDate.setSeconds(0);
+            newDate.setMilliseconds(0);
+
+            // Abrir el selector de hora inmediatamente después
+            setTimeout(() => {
+              DateTimePickerAndroid.open({
+                value: newDate,
+                mode: 'time',
+                is24Hour: true,
+                onChange: (timeEvent, timeDate) => {
+                  if (timeEvent.type === 'set' && timeDate) {
+                    // Combinar la fecha seleccionada con la hora seleccionada
+                    const finalDate = new Date(date);
+                    finalDate.setHours(timeDate.getHours());
+                    finalDate.setMinutes(timeDate.getMinutes());
+                    finalDate.setSeconds(0);
+                    finalDate.setMilliseconds(0);
+                    setSelectedDate(finalDate);
+                  }
+                },
+              });
+            }, 500);
           }
         },
       });
-      return;
+    } else {
+      setShowIosPicker(true);
     }
-
-    setShowIosPicker(true);
   }, [selectedDate]);
 
   useEffect(() => {
@@ -368,7 +411,7 @@ export default function RecordatoriosScreen({ navigation }) {
         <TouchableOpacity style={styles.pickerButton} onPress={openPicker}>
           <View>
             <Text style={styles.pickerText}>{formatDateTime(selectedDate)}</Text>
-            <Text style={styles.pickerHint}>Tocá para elegir otra fecha y hora</Text>
+            <Text style={styles.pickerHint}>Tocá para elegir fecha y hora</Text>
           </View>
           <Text style={styles.pickerText}>📅</Text>
         </TouchableOpacity>
@@ -379,6 +422,7 @@ export default function RecordatoriosScreen({ navigation }) {
               value={selectedDate}
               mode="datetime"
               display="spinner"
+              minimumDate={new Date()}
               onChange={(_event, date) => {
                 if (date) {
                   setSelectedDate(date);
