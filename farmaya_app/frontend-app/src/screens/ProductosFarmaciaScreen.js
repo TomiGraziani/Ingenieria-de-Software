@@ -1,25 +1,26 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  Dimensions,
-  ScrollView,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import API from "../api/api";
+import { useTheme } from '../theme/ThemeProvider';
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -51,6 +52,9 @@ export default function ProductosFarmaciaScreen({ route }) {
   const [cantidadSeleccionada, setCantidadSeleccionada] = useState("1");
   const [recetaTemporal, setRecetaTemporal] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
+
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
 
   useEffect(() => {
     const fetchProductos = async () => {
@@ -699,17 +703,18 @@ export default function ProductosFarmaciaScreen({ route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme) => 
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.background,
     padding: 12,
     paddingHorizontal: 14,
   },
   title: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1E88E5",
+    color: theme.colors.text,
     marginBottom: 12,
     paddingHorizontal: 4,
   },
@@ -718,12 +723,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f8f9fa",
+    backgroundColor: theme.colors.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: theme.colors.border,
     gap: 10,
     minHeight: 100,
   },

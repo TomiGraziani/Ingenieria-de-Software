@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
+import { useTheme } from '../theme/ThemeProvider';
 import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const normalizeRepartidorStatus = (estado) => {
@@ -22,6 +22,8 @@ const normalizeRepartidorStatus = (estado) => {
 
 export default function HomeRepartidorScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
 
   const getDireccionFarmacia = useCallback(
     (pedido) =>
@@ -216,10 +218,10 @@ export default function HomeRepartidorScreen({ navigation }) {
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.farmacia}</Text>
-      <Text>📍 {getDireccionFarmacia(item)}</Text>
-      <Text>🏠 {getDireccionCliente(item)}</Text>
-      <Text>🛵 Distancia: {item.distancia} km</Text>
-      <Text>💊 Pedido: {item.productos}</Text>
+      <Text style={{color: theme.colors.textSecondary}}>📍 {getDireccionFarmacia(item)}</Text>
+      <Text style={{color: theme.colors.textSecondary}}>🏠 {getDireccionCliente(item)}</Text>
+      <Text style={{color: theme.colors.textSecondary}}>🛵 Distancia: {item.distancia} km</Text>
+      <Text style={{color: theme.colors.textSecondary}}>💊 Pedido: {item.productos}</Text>
 
       <View style={styles.buttons}>
         <TouchableOpacity style={styles.accept} onPress={() => aceptarPedido(item.id)}>
@@ -256,12 +258,13 @@ export default function HomeRepartidorScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  header: { fontSize: 22, fontWeight: "700", marginBottom: 12, marginTop: 8 },
-  card: { padding: 14, backgroundColor: "#f9f9f9", borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: "#ddd" },
-  title: { fontSize: 18, fontWeight: "600" },
+const createStyles = (theme) => 
+  StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: theme.colors.background, },
+  container: { flex: 1, padding: 20, backgroundColor: theme.colors.background, },
+  header: { fontSize: 22, fontWeight: "700", marginBottom: 12, marginTop: 8, color: theme.colors.text, },
+  card: { padding: 14, backgroundColor: theme.colors.surface, shadowColor: '#000', borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border, },
+  title: { fontSize: 18, fontWeight: "600", color: theme.colors.text, },
   buttons: { flexDirection: "row", marginTop: 10, gap: 10 },
   accept: { flex: 1, backgroundColor: "#2E7D32", padding: 10, borderRadius: 6 },
   reject: { flex: 1, backgroundColor: "#C62828", padding: 10, borderRadius: 6 },

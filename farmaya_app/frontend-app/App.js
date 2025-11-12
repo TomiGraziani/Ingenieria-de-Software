@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Platform, LogBox } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { useEffect } from 'react';
+import { LogBox, Platform } from 'react-native';
 
 // 🔹 Screens principales
 import HomeScreen from './src/screens/HomeScreen';
@@ -13,16 +13,16 @@ import WelcomeScreen from './src/screens/WelcomeScreen';
 
 
 // 🔹 Screens de farmacia y repartidor
+import AgregarProductoScreen from './src/screens/AgregarProductoScreen';
+import EditarPerfilFarmaciaScreen from './src/screens/EditarPerfilFarmaciaScreen';
 import HomeFarmaciaScreen from './src/screens/HomeFarmaciaScreen';
 import HomeRepartidorScreen from './src/screens/HomeRepartidorScreen';
-import ProfileFarmaciaScreen from './src/screens/ProfileFarmaciaScreen';
-import PedidosFarmaciaScreen from './src/screens/PedidosFarmaciaScreen';
-import EditarPerfilFarmaciaScreen from './src/screens/EditarPerfilFarmaciaScreen';
-import AgregarProductoScreen from './src/screens/AgregarProductoScreen';
-import VentasFarmaciaScreen from './src/screens/VentasFarmaciaScreen';
-import PedidoActivoScreen from './src/screens/PedidoActivoScreen';
 import MisPedidosScreen from './src/screens/MisPedidosScreen';
+import PedidoActivoScreen from './src/screens/PedidoActivoScreen';
+import PedidosFarmaciaScreen from './src/screens/PedidosFarmaciaScreen';
+import ProfileFarmaciaScreen from './src/screens/ProfileFarmaciaScreen';
 import RecordatoriosScreen from './src/screens/RecordatoriosScreen';
+import VentasFarmaciaScreen from './src/screens/VentasFarmaciaScreen';
 
 // 🔹 Mapa y productos
 import BuscarFarmaciaScreen from './src/screens/BuscarFarmaciaScreen';
@@ -100,8 +100,8 @@ export default function App() {
             <Stack.Screen name="ProductosFarmacia" component={ProductosFarmaciaScreen} />
 
             {/* 🔹 Historial de pedidos del cliente */}
-            <Stack.Screen name="MisPedidos" component={MisPedidosScreen} />
-            <Stack.Screen name="Recordatorios" component={RecordatoriosScreen} />
+            <Stack.Screen name="MisPedidos" component={MisPedidosScreen} screenOptions={{ headerShown: false, }} />
+            <Stack.Screen name="Recordatorios" component={RecordatoriosScreen} screenOptions={{ headerShown: false, }} />
           </Stack.Navigator>
         </NavigationContainer>
       </ThemeProvider>

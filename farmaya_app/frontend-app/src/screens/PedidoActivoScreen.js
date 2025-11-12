@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-import getClienteOrdersStorageKey from "../utils/storageKeys";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import API from "../api/api";
+import { useTheme } from '../theme/ThemeProvider';
+import getClienteOrdersStorageKey from "../utils/storageKeys";
 
 const normalizeStatus = (status) => {
   const value = (status || "").toString().trim().toLowerCase();
@@ -20,6 +20,8 @@ const normalizeStatus = (status) => {
 };
 
 export default function PedidoActivoScreen({ route, navigation }) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const { pedido } = route.params;
   const pedidoId = useMemo(() => pedido?.id?.toString() ?? "", [pedido?.id]);
   const [currentStatus, setCurrentStatus] = useState(() => normalizeStatus(pedido?.estado));
@@ -300,19 +302,22 @@ export default function PedidoActivoScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 20 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 20 },
+const createStyles = (theme) => 
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.colors.background, padding: 20 },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 20, color: theme.colors.text, },
   card: {
-    backgroundColor: "#f4f4f4",
+    backgroundColor: theme.colors.surface,
     padding: 15,
     borderRadius: 10,
     marginBottom: 30,
+    shadowColor: '#000',
+    borderColor: theme.colors.border,
   },
-  label: { fontWeight: "600", marginTop: 8 },
-  text: { fontSize: 16, marginBottom: 6 },
-  button: { backgroundColor: "#1565C0", padding: 14, borderRadius: 8, marginBottom: 10 },
-  buttonText: { textAlign: "center", color: "#fff", fontWeight: "600" },
+  label: { fontWeight: "600", marginTop: 8, color: theme.colors.text, },
+  text: { color: theme.colors.textSecondary,fontSize: 16, marginBottom: 6 },
+  button: { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary,padding: 14, borderRadius: 8, marginBottom: 10 },
+  buttonText: { textAlign: "center", color: theme.colors.buttonText, fontWeight: "600" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",

@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,10 +9,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-
 import API from "../api/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from '../theme/ThemeProvider';
 
 const ESTADO_LABEL = {
   creado: "Pedido creado",
@@ -57,11 +57,13 @@ const formatDate = (value) => {
 };
 
 export default function MisPedidosScreen({ navigation }) {
+  const { theme } = useTheme();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [userLoaded, setUserLoaded] = useState(false);
+  const styles = createStyles(theme);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -216,46 +218,108 @@ export default function MisPedidosScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f5" },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  farmacia: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-  info: { fontSize: 14, color: "#424242", marginTop: 6 },
-  divider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 12 },
-  detalleTitulo: { fontSize: 14, fontWeight: "600", marginBottom: 8, color: "#1F2937" },
-  detalleItem: { marginBottom: 6 },
-  detalleProducto: { fontSize: 14, fontWeight: "600", color: "#111827" },
-  detalleReceta: { fontSize: 12, color: "#4b5563", marginTop: 2 },
-  emptyContainer: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 32 },
-  emptyContent: { alignItems: "center", paddingHorizontal: 24 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#1E88E5", textAlign: "center" },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#607D8B",
-    textAlign: "center",
-    marginTop: 8,
-    lineHeight: 20,
-  },
-});
+const createStyles = (theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      padding: 16,
+      borderRadius: 16,
+      marginHorizontal: 16,
+      marginVertical: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    farmacia: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    badge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    badgeText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 12,
+    },
+    info: {
+      color: theme.colors.textSecondary,
+      fontSize: 14,
+      marginBottom: 2,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginVertical: 10,
+    },
+    detalleTitulo: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: theme.colors.text,
+      marginBottom: 6,
+    },
+    detalleItem: {
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 10,
+      padding: 10,
+      marginVertical: 4,
+    },
+    detalleProducto: {
+      fontSize: 14,
+      color: theme.colors.text,
+      fontWeight: '500',
+    },
+    detalleReceta: {
+      fontSize: 13,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    emptyContainer: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+      paddingHorizontal: 24,
+    },
+    emptyContent: {
+      alignItems: 'center',
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.colors.text,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+  });
