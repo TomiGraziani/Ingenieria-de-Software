@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import API from '../api/api';
 import { useTheme } from '../theme/ThemeProvider';
+import ErrorModal from '../components/ErrorModal';
+import { extractErrorMessage } from '../utils/errorHandler';
 
 export default function LoginScreen({ navigation }) {
   const { theme } = useTheme();
@@ -20,6 +22,8 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const styles = createStyles(theme);
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -69,12 +73,18 @@ export default function LoginScreen({ navigation }) {
         navigation.replace('Home');
       }
     } catch (error) {
+      // Extraer mensaje de error amigable del backend
+      let friendlyMessage = 'No se pudo conectar con el servidor.';
+
       if (error.response?.status === 401) {
-        Alert.alert('Credenciales incorrectas', 'Email o contraseña inválidos.');
+        friendlyMessage = 'Email o contraseña inválidos.';
       } else {
-        console.error('Error durante el login:', error.response?.data || error);
-        Alert.alert('Error', 'No se pudo conectar con el servidor.');
+        friendlyMessage = extractErrorMessage(error);
       }
+
+      // Mostrar el modal de error en lugar del Alert
+      setErrorMessage(friendlyMessage);
+      setErrorModalVisible(true);
     } finally {
       setLoading(false);
     }
@@ -136,6 +146,11 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <ErrorModal
+        visible={errorModalVisible}
+        message={errorMessage}
+        onClose={() => setErrorModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

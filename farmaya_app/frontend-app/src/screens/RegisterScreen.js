@@ -14,6 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import API from '../api/api';
 import { useTheme } from '../theme/ThemeProvider';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ErrorModal from '../components/ErrorModal';
+import { extractErrorMessage } from '../utils/errorHandler';
 
 export default function RegisterScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
@@ -27,6 +29,8 @@ export default function RegisterScreen({ navigation }) {
   const [matricula, setMatricula] = useState('');
   const [mayorEdad, setMayorEdad] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
@@ -121,41 +125,12 @@ export default function RegisterScreen({ navigation }) {
       // 🔹 Redirigir a la pantalla de login
       navigation.replace('Login');
     } catch (error) {
-      // No mostrar el error en consola para evitar que aparezca en la UI
-      // console.error('❌ Error al registrar usuario:', error.response?.data || error);
+      // Extraer mensaje de error amigable del backend
+      const friendlyMessage = extractErrorMessage(error);
 
-      // Extraer mensaje de error del backend
-      let errorMessage = 'No se pudo completar el registro. Intenta nuevamente.';
-
-      if (error.response?.data) {
-        const errorData = error.response.data;
-
-        // Buscar mensajes de error en diferentes campos
-        if (errorData.email && Array.isArray(errorData.email)) {
-          errorMessage = errorData.email[0];
-        } else if (errorData.nombre && Array.isArray(errorData.nombre)) {
-          errorMessage = errorData.nombre[0];
-        } else if (errorData.telefono && Array.isArray(errorData.telefono)) {
-          errorMessage = errorData.telefono[0];
-        } else if (errorData.matricula && Array.isArray(errorData.matricula)) {
-          errorMessage = errorData.matricula[0];
-        } else if (typeof errorData === 'object') {
-          // Si es un objeto con múltiples campos, tomar el primer mensaje
-          const firstKey = Object.keys(errorData)[0];
-          if (firstKey && Array.isArray(errorData[firstKey])) {
-            errorMessage = errorData[firstKey][0];
-          } else if (errorData.detail) {
-            errorMessage = errorData.detail;
-          }
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
-        } else if (errorData.detail) {
-          errorMessage = errorData.detail;
-        }
-      }
-
-      // Mostrar solo el Alert, no el banner de error
-      Alert.alert('Error', errorMessage);
+      // Mostrar el modal de error en lugar del Alert
+      setErrorMessage(friendlyMessage);
+      setErrorModalVisible(true);
     } finally {
       setLoading(false);
     }
@@ -300,6 +275,11 @@ export default function RegisterScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <ErrorModal
+        visible={errorModalVisible}
+        message={errorMessage}
+        onClose={() => setErrorModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -2,11 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert } from 'react-native';
 import API from '../api/api';
+import ErrorModal from '../components/ErrorModal';
+import { extractErrorMessage } from '../utils/errorHandler';
 
 export default function ProfileScreen() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // 🔹 Cargar datos del usuario desde el backend
   const loadUser = async () => {
@@ -71,37 +75,12 @@ export default function ProfileScreen() {
       await AsyncStorage.setItem('user', JSON.stringify(response.data));
       Alert.alert('✅ Éxito', 'Perfil actualizado correctamente.');
     } catch (error) {
-      console.error('Error al guardar perfil:', error.response?.data || error);
+      // Extraer mensaje de error amigable del backend
+      const friendlyMessage = extractErrorMessage(error);
 
-      // Extraer mensaje de error del backend
-      let errorMessage = 'No se pudo guardar el perfil.';
-
-      if (error.response?.data) {
-        const errorData = error.response.data;
-
-        // Buscar mensajes de error en diferentes campos
-        if (errorData.email && Array.isArray(errorData.email)) {
-          errorMessage = errorData.email[0];
-        } else if (errorData.nombre && Array.isArray(errorData.nombre)) {
-          errorMessage = errorData.nombre[0];
-        } else if (errorData.telefono && Array.isArray(errorData.telefono)) {
-          errorMessage = errorData.telefono[0];
-        } else if (typeof errorData === 'object') {
-          // Si es un objeto con múltiples campos, tomar el primer mensaje
-          const firstKey = Object.keys(errorData)[0];
-          if (firstKey && Array.isArray(errorData[firstKey])) {
-            errorMessage = errorData[firstKey][0];
-          } else if (errorData.detail) {
-            errorMessage = errorData.detail;
-          }
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
-        } else if (errorData.detail) {
-          errorMessage = errorData.detail;
-        }
-      }
-
-      Alert.alert('Error', errorMessage);
+      // Mostrar el modal de error en lugar del Alert
+      setErrorMessage(friendlyMessage);
+      setErrorModalVisible(true);
     } finally {
       setSaving(false);
     }
@@ -161,6 +140,11 @@ export default function ProfileScreen() {
         onPress={handleSave}
         color="#1E88E5"
         disabled={saving}
+      />
+      <ErrorModal
+        visible={errorModalVisible}
+        message={errorMessage}
+        onClose={() => setErrorModalVisible(false)}
       />
     </View>
   );
