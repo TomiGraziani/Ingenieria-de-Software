@@ -121,7 +121,8 @@ export default function RegisterScreen({ navigation }) {
       // 🔹 Redirigir a la pantalla de login
       navigation.replace('Login');
     } catch (error) {
-      console.error('❌ Error al registrar usuario:', error.response?.data || error);
+      // No mostrar el error en consola para evitar que aparezca en la UI
+      // console.error('❌ Error al registrar usuario:', error.response?.data || error);
 
       // Extraer mensaje de error del backend
       let errorMessage = 'No se pudo completar el registro. Intenta nuevamente.';
@@ -153,6 +154,7 @@ export default function RegisterScreen({ navigation }) {
         }
       }
 
+      // Mostrar solo el Alert, no el banner de error
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);

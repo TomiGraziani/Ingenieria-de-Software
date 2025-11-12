@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Platform } from 'react-native';
+import { Platform, LogBox } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 // 🔹 Screens principales
@@ -45,6 +45,9 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   useEffect(() => {
+    // Ocultar todos los warnings y errores de la consola en la UI
+    LogBox.ignoreAllLogs(true);
+
     const configureAndroidChannel = async () => {
       if (Platform.OS !== 'android') {
         return;
@@ -66,39 +69,39 @@ export default function App() {
       <ThemeProvider>
         <NavigationContainer>
           <Stack.Navigator
-          initialRouteName="Welcome"
-          screenOptions={{
-            headerShown: false, // Oculta el header por defecto
-          }}
-        >
-          {/* 🔹 Autenticación */}
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
+            initialRouteName="Welcome"
+            screenOptions={{
+              headerShown: false, // Oculta el header por defecto
+            }}
+          >
+            {/* 🔹 Autenticación */}
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
 
-          {/* 🔹 Usuario Cliente */}
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
+            {/* 🔹 Usuario Cliente */}
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
 
-          {/* 🔹 Farmacia */}
-          <Stack.Screen name="HomeFarmacia" component={HomeFarmaciaScreen} />
-          <Stack.Screen name="ProfileFarmacia" component={ProfileFarmaciaScreen} />
-          <Stack.Screen name="PedidosFarmacia" component={PedidosFarmaciaScreen} />
-          <Stack.Screen name="EditarPerfilFarmacia" component={EditarPerfilFarmaciaScreen} />
-          <Stack.Screen name="AgregarProducto" component={AgregarProductoScreen} />
-          <Stack.Screen name="VentasFarmacia" component={VentasFarmaciaScreen} />
+            {/* 🔹 Farmacia */}
+            <Stack.Screen name="HomeFarmacia" component={HomeFarmaciaScreen} />
+            <Stack.Screen name="ProfileFarmacia" component={ProfileFarmaciaScreen} />
+            <Stack.Screen name="PedidosFarmacia" component={PedidosFarmaciaScreen} />
+            <Stack.Screen name="EditarPerfilFarmacia" component={EditarPerfilFarmaciaScreen} />
+            <Stack.Screen name="AgregarProducto" component={AgregarProductoScreen} />
+            <Stack.Screen name="VentasFarmacia" component={VentasFarmaciaScreen} />
 
-          {/* 🔹 Repartidor */}
-          <Stack.Screen name="HomeRepartidor" component={HomeRepartidorScreen} />
-          <Stack.Screen name="PedidoActivo" component={PedidoActivoScreen} />
+            {/* 🔹 Repartidor */}
+            <Stack.Screen name="HomeRepartidor" component={HomeRepartidorScreen} />
+            <Stack.Screen name="PedidoActivo" component={PedidoActivoScreen} />
 
-          {/* 🔹 Mapas y productos */}
-          <Stack.Screen name="BuscarFarmacia" component={BuscarFarmaciaScreen} />
-          <Stack.Screen name="ProductosFarmacia" component={ProductosFarmaciaScreen} />
+            {/* 🔹 Mapas y productos */}
+            <Stack.Screen name="BuscarFarmacia" component={BuscarFarmaciaScreen} />
+            <Stack.Screen name="ProductosFarmacia" component={ProductosFarmaciaScreen} />
 
-          {/* 🔹 Historial de pedidos del cliente */}
-          <Stack.Screen name="MisPedidos" component={MisPedidosScreen} />
-          <Stack.Screen name="Recordatorios" component={RecordatoriosScreen} />
+            {/* 🔹 Historial de pedidos del cliente */}
+            <Stack.Screen name="MisPedidos" component={MisPedidosScreen} />
+            <Stack.Screen name="Recordatorios" component={RecordatoriosScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </ThemeProvider>

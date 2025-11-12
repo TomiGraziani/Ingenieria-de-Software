@@ -159,6 +159,19 @@ class CrearPedidoView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+                # Validar que haya stock suficiente
+                if producto.stock < cantidad:
+                    transaction.set_rollback(True)
+                    return Response(
+                        {
+                            'detail': (
+                                f'No hay stock suficiente de "{producto.nombre}". '
+                                f'Stock disponible: {producto.stock}, solicitado: {cantidad}.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 receta_key = detalle.get('receta_key') or detalle.get('recetaCampo')
                 receta_file = None
                 if receta_key:
@@ -189,6 +202,10 @@ class CrearPedidoView(APIView):
                     detalle_obj.receta_archivo = receta_file
 
                 detalle_obj.save()
+
+                # Actualizar el stock del producto (restar la cantidad pedida)
+                producto.stock -= cantidad
+                producto.save(update_fields=['stock'])
 
         serializer = PedidoSerializer(pedido, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)

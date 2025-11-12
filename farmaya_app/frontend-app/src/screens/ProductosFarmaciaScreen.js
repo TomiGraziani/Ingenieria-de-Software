@@ -192,10 +192,51 @@ export default function ProductosFarmaciaScreen({ route }) {
       return;
     }
 
+    // Validar que el producto tenga stock disponible
+    if (productoSeleccionado.stock <= 0) {
+      Alert.alert(
+        "Sin stock",
+        `El producto "${productoSeleccionado.nombre}" no tiene stock disponible.`
+      );
+      return;
+    }
+
     const cantidadNum = parseInt(cantidadSeleccionada, 10);
     if (Number.isNaN(cantidadNum) || cantidadNum <= 0) {
       Alert.alert("Cantidad inválida", "Ingresá una cantidad mayor a cero.");
       return;
+    }
+
+    // Validar que la cantidad no exceda el stock disponible
+    if (cantidadNum > productoSeleccionado.stock) {
+      Alert.alert(
+        "Stock insuficiente",
+        `Solo hay ${productoSeleccionado.stock} unidades disponibles de "${productoSeleccionado.nombre}".`
+      );
+      return;
+    }
+
+    // Si está editando, validar que la nueva cantidad total no exceda el stock
+    if (editingItemId) {
+      const itemExistente = carrito.find((item) => item.producto.id === editingItemId);
+      if (itemExistente && cantidadNum > productoSeleccionado.stock) {
+        Alert.alert(
+          "Stock insuficiente",
+          `Solo hay ${productoSeleccionado.stock} unidades disponibles de "${productoSeleccionado.nombre}".`
+        );
+        return;
+      }
+    } else {
+      // Si no está editando, validar que la cantidad total (existente + nueva) no exceda el stock
+      const existente = carrito.find((item) => item.producto.id === productoSeleccionado.id);
+      const cantidadTotal = existente ? existente.cantidad + cantidadNum : cantidadNum;
+      if (cantidadTotal > productoSeleccionado.stock) {
+        Alert.alert(
+          "Stock insuficiente",
+          `Solo hay ${productoSeleccionado.stock} unidades disponibles de "${productoSeleccionado.nombre}". Ya tenés ${existente.cantidad} en el carrito.`
+        );
+        return;
+      }
     }
 
     let recetaAdjunta = recetaTemporal;
@@ -396,6 +437,14 @@ export default function ProductosFarmaciaScreen({ route }) {
 
       setCarrito([]);
       setDireccionEntrega("");
+
+      // Recargar productos para actualizar el stock
+      try {
+        const responseProductos = await API.get(`productos/farmacia/${farmacia.id}/`);
+        setProductos(responseProductos.data);
+      } catch (error) {
+        console.error("Error al recargar productos:", error);
+      }
     } catch (error) {
       console.error("❌ Error al crear pedido:", error.response?.data || error);
       Alert.alert(
@@ -441,17 +490,25 @@ export default function ProductosFarmaciaScreen({ route }) {
                 <Text style={styles.descripcion}>{item.descripcion}</Text>
               ) : null}
               <Text style={styles.precio}>💰 ${item.precio}</Text>
-              <Text style={styles.stock}>📦 Stock disponible: {item.stock}</Text>
+              <Text style={[styles.stock, item.stock <= 0 && styles.stockAgotado]}>
+                📦 Stock disponible: {item.stock}
+              </Text>
+              {item.stock <= 0 && (
+                <Text style={styles.sinStock}>⚠️ Sin stock</Text>
+              )}
               {item.requiere_receta && (
                 <Text style={styles.receta}>📜 Requiere receta</Text>
               )}
             </View>
 
             <TouchableOpacity
-              style={styles.addButton}
+              style={[styles.addButton, item.stock <= 0 && styles.addButtonDisabled]}
               onPress={() => abrirModalProducto(item)}
+              disabled={item.stock <= 0}
             >
-              <Text style={styles.addButtonText}>Agregar</Text>
+              <Text style={[styles.addButtonText, item.stock <= 0 && styles.addButtonTextDisabled]}>
+                {item.stock <= 0 ? "Sin stock" : "Agregar"}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -675,6 +732,8 @@ const styles = StyleSheet.create({
   descripcion: { fontSize: 13, color: "#555", marginVertical: 4 },
   precio: { fontSize: 14, fontWeight: "600", color: "#2E7D32" },
   stock: { fontSize: 12, color: "#333", marginTop: 4 },
+  stockAgotado: { color: "#D32F2F", fontWeight: "600" },
+  sinStock: { fontSize: 12, color: "#D32F2F", marginTop: 2, fontWeight: "600" },
   receta: { fontSize: 12, color: "#D84315", marginTop: 2 },
   addButton: {
     backgroundColor: "#1E88E5",
@@ -682,7 +741,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
+  addButtonDisabled: {
+    backgroundColor: "#BDBDBD",
+    opacity: 0.6,
+  },
   addButtonText: { color: "#fff", fontWeight: "600" },
+  addButtonTextDisabled: { color: "#757575" },
   cartContainerWrapper: {
     position: "absolute",
     bottom: 0,
