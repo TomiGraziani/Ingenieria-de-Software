@@ -15,6 +15,7 @@ import {
   Dimensions,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/api";
 import * as DocumentPicker from "expo-document-picker";
@@ -35,6 +36,7 @@ const formatRecetaNombre = (receta) => {
 
 export default function ProductosFarmaciaScreen({ route }) {
   const { farmacia } = route.params;
+  const insets = useSafeAreaInsets();
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [procesandoPedido, setProcesandoPedido] = useState(false);
@@ -416,13 +418,13 @@ export default function ProductosFarmaciaScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🛍 Productos de {farmacia.nombre}</Text>
+      <Text style={[styles.title, { paddingTop: insets.top + 8 }]}>🛍 Productos de {farmacia.nombre}</Text>
 
       <FlatList
         data={productos}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{
-          paddingBottom: carrito.length > 0 ? 200 : 20,
+          paddingBottom: carrito.length > 0 ? 280 : 20,
           paddingTop: 8,
         }}
         ListEmptyComponent={
@@ -702,7 +704,7 @@ const styles = StyleSheet.create({
   },
   cartContainer: {
     padding: 12,
-    paddingBottom: 16,
+    paddingBottom: 20,
     borderRadius: 12,
     backgroundColor: "#eef4ff",
   },
@@ -747,7 +749,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     marginTop: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   confirmButtonText: { color: "#fff", fontWeight: "700", textAlign: "center", fontSize: 16 },
   modalOverlay: {
