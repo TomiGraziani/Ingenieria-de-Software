@@ -88,6 +88,8 @@ export const extractErrorMessage = (error) => {
     'El DNI solo debe contener números.': 'El DNI solo debe contener números.',
     'El DNI debe tener 7, 8 o 10 dígitos.': 'El DNI debe tener 7, 8 o 10 dígitos.',
     'El DNI es obligatorio para clientes y repartidores.': 'El DNI es obligatorio.',
+    'Ya existe una farmacia registrada con esta matrícula.': 'Esta matrícula ya está registrada.',
+    'Ya existe un usuario con este teléfono.': 'Este teléfono ya está en uso.',
     'Las farmacias deben proporcionar un teléfono de contacto.': 'Las farmacias deben proporcionar un teléfono de contacto.',
     'Las farmacias deben proporcionar un número de matrícula.': 'Las farmacias deben proporcionar un número de matrícula.',
   };
