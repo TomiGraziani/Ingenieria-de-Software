@@ -106,6 +106,26 @@ class RegisterSerializer(serializers.ModelSerializer):
                     'Ya existe un/a usuario con este/a nombre.'
                 )
         return value
+    def validate_matricula(self, value):
+        """Valida que la matrícula sea única"""
+        if value:
+            matricula_limpia = str(value).strip()
+        
+            # Validar unicidad
+            if User.objects.filter(matricula=matricula_limpia).exists():
+                raise serializers.ValidationError('Ya existe una farmacia registrada con esta matrícula.')
+            
+            return matricula_limpia
+        return value
+    
+    def validate_telefono(self, value):
+        telefono_limpio = str(value).strip()
+
+        # Validar que no exista en la base
+        if User.objects.filter(telefono=telefono_limpio).exists():
+            raise serializers.ValidationError('Ya existe un usuario con este teléfono.')
+
+        return telefono_limpio
 
     def validate_dni(self, value):
         """Valida que el DNI solo contenga números y tenga 7, 8 o 10 dígitos."""
