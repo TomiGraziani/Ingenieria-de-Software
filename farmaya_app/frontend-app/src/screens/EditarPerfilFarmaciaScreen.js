@@ -68,14 +68,22 @@ export default function EditarPerfilFarmaciaScreen({ navigation }) {
     <View style={styles.container}>
       <Text style={styles.title}>Editar Perfil</Text>
 
-      {["direccion", "telefono", "horarios"].map((field) => (
+      {["direccion", "telefono", "horarios", "matricula"].map((field) => (
         <TextInput
           key={field}
-          style={styles.input}
+          style={[
+            styles.input,
+            field === "matricula" && { backgroundColor: theme.colors.muted, color: theme.colors.textSecondary }
+          ]}
           placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
           placeholderTextColor={theme.colors.textSecondary}
           value={farmacia?.[field] || ""}
-          onChangeText={(text) => setFarmacia({ ...farmacia, [field]: text })}
+          onChangeText={(text) => {
+            if (field !== "matricula") {
+              setFarmacia({ ...farmacia, [field]: text });
+            }
+          }}
+          editable={field !== "matricula"} // 🔹 hace que "matricula" no sea editable
         />
       ))}
 

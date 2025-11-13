@@ -96,6 +96,12 @@ export default function RegisterScreen({ navigation }) {
         Alert.alert('Error', 'Ingresá el número de matrícula de la farmacia.');
         return;
       }
+
+      if (matricula.length !== 5) {
+        Alert.alert('Error', "La matrícula debe tener exactamente 5 números.");
+        return;
+      }
+
     }
 
     if (rol === 'repartidor') {
@@ -269,9 +275,13 @@ export default function RegisterScreen({ navigation }) {
                 style={styles.input}
                 placeholder="Ingresá el número de matrícula"
                 placeholderTextColor={theme.colors.textSecondary}
-                keyboardType="default"
+                keyboardType="numeric"
                 value={matricula}
-                onChangeText={setMatricula}
+                maxLength={5} // limitar a 5 caracteres
+                onChangeText={(text) => {
+                  const soloNumeros = text.replace(/[^0-9]/g, ''); // eliminar todo lo que no sea número
+                  setMatricula(soloNumeros)
+                }}
               />
 
               <Text style={styles.label}>Teléfono de contacto</Text>
