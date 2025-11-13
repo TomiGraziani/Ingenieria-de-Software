@@ -44,6 +44,9 @@ class PedidoSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
     cliente_email = serializers.CharField(source='cliente.email', read_only=True)
     farmacia_nombre = serializers.CharField(source='farmacia.nombre', read_only=True)
+    farmacia_direccion = serializers.CharField(source='farmacia.direccion', read_only=True)
+    repartidor_id = serializers.IntegerField(source='repartidor.id', read_only=True, allow_null=True)
+    repartidor_nombre = serializers.CharField(source='repartidor.nombre', read_only=True, allow_null=True)
     detalles = serializers.SerializerMethodField()
     puede_aceptar = serializers.SerializerMethodField()
 
@@ -54,6 +57,9 @@ class PedidoSerializer(serializers.ModelSerializer):
             'cliente_nombre',
             'cliente_email',
             'farmacia_nombre',
+            'farmacia_direccion',
+            'repartidor_id',
+            'repartidor_nombre',
             'direccion_entrega',
             'metodo_pago',
             'fecha',

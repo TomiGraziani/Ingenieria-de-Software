@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 
 from productos.models import Producto
 
-from .models import DetallePedido, Pedido
+from .models import DetallePedido, Pedido, PedidoRechazado
 from .serializers import DetallePedidoSerializer, PedidoSerializer
 
 
@@ -53,12 +53,41 @@ class MisPedidosView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return (
-            Pedido.objects.select_related('cliente', 'farmacia')
-            .prefetch_related('detalles__producto')
-            .filter(cliente=self.request.user)
-            .order_by('-fecha')
-        )
+        user = self.request.user
+        tipo_usuario = getattr(user, 'tipo_usuario', None)
+        
+        # Si es cliente, devolver sus pedidos
+        if tipo_usuario == 'cliente':
+            return (
+                Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+                .prefetch_related('detalles__producto')
+                .filter(cliente=user)
+                .order_by('-fecha')
+            )
+        # Si es repartidor, devolver pedidos asignados a él
+        elif tipo_usuario == 'repartidor':
+            return (
+                Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+                .prefetch_related('detalles__producto')
+                .filter(repartidor=user)
+                .order_by('-fecha')
+            )
+        # Si es farmacia, devolver pedidos de esa farmacia
+        elif tipo_usuario == 'farmacia':
+            return (
+                Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+                .prefetch_related('detalles__producto')
+                .filter(farmacia=user)
+                .order_by('-fecha')
+            )
+        # Por defecto, devolver pedidos del cliente (comportamiento anterior)
+        else:
+            return (
+                Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+                .prefetch_related('detalles__producto')
+                .filter(cliente=user)
+                .order_by('-fecha')
+            )
 
 
 class CrearPedidoView(APIView):
@@ -417,3 +446,150 @@ class OmitirRecetaView(APIView):
 
         serializer = DetallePedidoSerializer(detalle, context={'request': request})
         return Response(serializer.data)
+
+
+class PedidosDisponiblesView(APIView):
+    """
+    Vista para obtener los pedidos disponibles para un repartidor.
+    Excluye los pedidos que el repartidor ya ha rechazado.
+    Solo muestra pedidos que están en estado 'aceptado' o 'en_preparacion'
+    y que no tienen un repartidor asignado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if getattr(request.user, 'tipo_usuario', None) != 'repartidor':
+            return Response(
+                {'detail': 'Solo los repartidores pueden consultar esta información.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Obtener IDs de pedidos que el repartidor ya ha rechazado
+        pedidos_rechazados_ids = PedidoRechazado.objects.filter(
+            repartidor=request.user
+        ).values_list('pedido_id', flat=True)
+
+        # Obtener pedidos disponibles:
+        # 1. Estado 'aceptado' o 'en_preparacion'
+        # 2. No tienen repartidor asignado (repartidor es None)
+        # 3. No están en la lista de pedidos rechazados por este repartidor
+        pedidos_disponibles = (
+            Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+            .prefetch_related('detalles__producto')
+            .filter(
+                estado__in=['aceptado', 'en_preparacion'],
+                repartidor__isnull=True
+            )
+            .exclude(id__in=pedidos_rechazados_ids)
+            .order_by('-fecha')
+        )
+
+        serializer = PedidoSerializer(pedidos_disponibles, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class AceptarPedidoView(APIView):
+    """
+    Vista para que un repartidor acepte un pedido.
+    Cuando se acepta, se asigna el repartidor al pedido y se cambia el estado a 'en_camino'
+    si el estado era 'aceptado' o 'en_preparacion'.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pedido_id):
+        if getattr(request.user, 'tipo_usuario', None) != 'repartidor':
+            return Response(
+                {'detail': 'Solo los repartidores pueden aceptar pedidos.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        pedido = get_object_or_404(
+            Pedido.objects.select_related('cliente', 'farmacia', 'repartidor')
+            .prefetch_related('detalles'),
+            pk=pedido_id,
+        )
+
+        # Verificar que el pedido esté disponible
+        if pedido.repartidor is not None:
+            return Response(
+                {'detail': 'Este pedido ya está asignado a otro repartidor.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if pedido.estado not in ['aceptado', 'en_preparacion']:
+            return Response(
+                {'detail': 'Solo se pueden aceptar pedidos que estén aceptados o en preparación.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verificar que el repartidor no haya rechazado este pedido antes
+        # (aunque esto no debería pasar por el filtro de PedidosDisponiblesView)
+        if PedidoRechazado.objects.filter(pedido=pedido, repartidor=request.user).exists():
+            return Response(
+                {'detail': 'Ya rechazaste este pedido anteriormente.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Asignar el repartidor al pedido y cambiar estado a 'en_camino'
+        pedido.repartidor = request.user
+        pedido.estado = 'en_camino'
+        pedido.save(update_fields=['repartidor', 'estado'])
+
+        # Eliminar cualquier registro de rechazo si existe (por si acaso)
+        PedidoRechazado.objects.filter(pedido=pedido, repartidor=request.user).delete()
+
+        serializer = PedidoSerializer(pedido, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RechazarPedidoView(APIView):
+    """
+    Vista para que un repartidor rechace un pedido.
+    Cuando se rechaza, se crea un registro en PedidoRechazado
+    para que ese pedido no aparezca más en la lista de pedidos disponibles
+    para ese repartidor, pero sí para los demás.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pedido_id):
+        if getattr(request.user, 'tipo_usuario', None) != 'repartidor':
+            return Response(
+                {'detail': 'Solo los repartidores pueden rechazar pedidos.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        pedido = get_object_or_404(
+            Pedido.objects.select_related('cliente', 'farmacia', 'repartidor'),
+            pk=pedido_id,
+        )
+
+        # Verificar que el pedido esté disponible (no asignado a otro repartidor)
+        if pedido.repartidor is not None and pedido.repartidor != request.user:
+            return Response(
+                {'detail': 'Este pedido ya está asignado a otro repartidor.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if pedido.estado not in ['aceptado', 'en_preparacion']:
+            return Response(
+                {'detail': 'Solo se pueden rechazar pedidos que estén aceptados o en preparación.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verificar que no haya rechazado este pedido antes
+        if PedidoRechazado.objects.filter(pedido=pedido, repartidor=request.user).exists():
+            return Response(
+                {'detail': 'Ya rechazaste este pedido anteriormente.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Crear registro de rechazo
+        PedidoRechazado.objects.create(
+            pedido=pedido,
+            repartidor=request.user
+        )
+
+        return Response(
+            {'detail': 'Pedido rechazado. Ya no aparecerá en tu lista de pedidos disponibles.'},
+            status=status.HTTP_200_OK
+        )

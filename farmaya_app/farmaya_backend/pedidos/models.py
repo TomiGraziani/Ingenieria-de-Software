@@ -24,6 +24,14 @@ class Pedido(models.Model):
         on_delete=models.CASCADE,
         related_name='pedidos_farmacia'
     )
+    repartidor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='pedidos_asignados',
+        null=True,
+        blank=True,
+        limit_choices_to={'tipo_usuario': 'repartidor'}
+    )
     productos = models.ManyToManyField(Producto, through='DetallePedido')  # 👈 relación intermedia
     direccion_entrega = models.CharField(max_length=255)
     metodo_pago = models.CharField(max_length=50)
@@ -33,6 +41,34 @@ class Pedido(models.Model):
 
     def __str__(self):
         return f"Pedido #{self.id} - {self.farmacia.nombre} ({self.estado})"
+
+
+class PedidoRechazado(models.Model):
+    """
+    Modelo para rastrear qué repartidores han rechazado qué pedidos.
+    Cuando un repartidor rechaza un pedido, este registro se crea
+    para que ese pedido no aparezca en la lista de pedidos disponibles
+    para ese repartidor, pero sí para los demás.
+    """
+    pedido = models.ForeignKey(
+        Pedido,
+        on_delete=models.CASCADE,
+        related_name='rechazos'
+    )
+    repartidor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='pedidos_rechazados',
+        limit_choices_to={'tipo_usuario': 'repartidor'}
+    )
+    fecha_rechazo = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['pedido', 'repartidor']
+        ordering = ['-fecha_rechazo']
+
+    def __str__(self):
+        return f"Pedido #{self.pedido.id} rechazado por {self.repartidor.email}"
 
 
 class DetallePedido(models.Model):
