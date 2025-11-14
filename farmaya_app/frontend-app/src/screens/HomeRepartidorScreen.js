@@ -96,56 +96,6 @@ export default function HomeRepartidorScreen({ navigation }) {
     }, [loadPedidoActivo, loadPedidosDisponibles])
   );
 
-  // Navegar a pantalla de pedido activo si existe
-  useEffect(() => {
-    if (pedidoActivo) {
-      navigation.replace("PedidoActivo", {
-        pedido: pedidoActivo,
-      });
-    }
-  }, [pedidoActivo, navigation]);
-
-  // Si hay un pedido activo, no mostrar nada (se navegará a PedidoActivo)
-  if (pedidoActivo) {
-    return null;
-  }
-
-  // Aceptar un pedido
-  const aceptarPedido = async (id) => {
-    try {
-      const response = await API.post(`pedidos/${id}/aceptar/`);
-      const pedidoAceptado = response.data;
-      
-      if (pedidoAceptado) {
-        // Navegar a la pantalla de pedido activo
-        const pedidoFormateado = formatearPedido(pedidoAceptado);
-        navigation.replace("PedidoActivo", {
-          pedido: pedidoFormateado,
-        });
-      }
-    } catch (error) {
-      console.error("Error aceptando pedido:", error.response?.data || error);
-      const errorMessage = error.response?.data?.detail || "No se pudo aceptar el pedido.";
-      Alert.alert("Error", errorMessage);
-    }
-  };
-
-  // Rechazar un pedido
-  const rechazarPedido = async (id) => {
-    try {
-      await API.post(`pedidos/${id}/rechazar/`);
-      
-      // Remover el pedido de la lista local
-      setPedidos((prev) => prev.filter((p) => p.id?.toString() !== id.toString()));
-      
-      Alert.alert("✅ Pedido rechazado", "El pedido ya no aparecerá en tu lista de pedidos disponibles.");
-    } catch (error) {
-      console.error("Error rechazando pedido:", error.response?.data || error);
-      const errorMessage = error.response?.data?.detail || "No se pudo rechazar el pedido.";
-      Alert.alert("Error", errorMessage);
-    }
-  };
-
   const getDireccionFarmacia = useCallback(
     (pedido) =>
       pedido.direccionFarmacia ||
@@ -163,6 +113,69 @@ export default function HomeRepartidorScreen({ navigation }) {
       "Dirección del cliente",
     []
   );
+
+  // Aceptar un pedido
+  const aceptarPedido = useCallback(async (id) => {
+    try {
+      const response = await API.post(`pedidos/${id}/aceptar/`);
+      const pedidoAceptado = response.data;
+      
+      if (pedidoAceptado) {
+        // Navegar a la pantalla de pedido activo
+        const pedidoFormateado = formatearPedido(pedidoAceptado);
+        navigation.replace("PedidoActivo", {
+          pedido: pedidoFormateado,
+        });
+      }
+    } catch (error) {
+      console.error("Error aceptando pedido:", error.response?.data || error);
+      const errorMessage = error.response?.data?.detail || "No se pudo aceptar el pedido.";
+      Alert.alert("Error", errorMessage);
+    }
+  }, [formatearPedido, navigation]);
+
+  // Rechazar un pedido
+  const rechazarPedido = useCallback(async (id) => {
+    try {
+      await API.post(`pedidos/${id}/rechazar/`);
+      
+      // Remover el pedido de la lista local
+      setPedidos((prev) => prev.filter((p) => p.id?.toString() !== id.toString()));
+      
+      Alert.alert("✅ Pedido rechazado", "El pedido ya no aparecerá en tu lista de pedidos disponibles.");
+    } catch (error) {
+      console.error("Error rechazando pedido:", error.response?.data || error);
+      const errorMessage = error.response?.data?.detail || "No se pudo rechazar el pedido.";
+      Alert.alert("Error", errorMessage);
+    }
+  }, []);
+
+  // Navegar a pantalla de pedido activo si existe
+  useEffect(() => {
+    if (pedidoActivo) {
+      // Usar un pequeño delay para asegurar que todos los hooks se ejecuten
+      const timer = setTimeout(() => {
+        navigation.replace("PedidoActivo", {
+          pedido: pedidoActivo,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [pedidoActivo, navigation]);
+
+  // Si hay un pedido activo, mostrar un loader mientras se navega
+  if (pedidoActivo) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Cargando pedido activo...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>

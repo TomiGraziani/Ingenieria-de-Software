@@ -111,6 +111,12 @@ export default function PedidoActivoScreen({ route, navigation }) {
 
   const marcarRetirado = async () => {
     try {
+      // Si ya está en_camino, no intentar actualizar en el backend
+      if (currentStatus === "en_camino") {
+        Alert.alert("ℹ️", "El pedido ya está marcado como retirado.");
+        return;
+      }
+
       // Actualizar en el backend primero
       try {
         await API.patch(`pedidos/${pedidoId}/estado/`, {
@@ -118,7 +124,14 @@ export default function PedidoActivoScreen({ route, navigation }) {
         });
       } catch (apiError) {
         console.error("Error actualizando estado en el backend:", apiError.response?.data || apiError);
-        // Continuar con la actualización local aunque falle el backend
+        // Si el error es que ya está en_camino, continuar con la actualización local
+        const errorDetail = apiError.response?.data?.detail || "";
+        if (errorDetail.includes("en camino")) {
+          // El pedido ya está en_camino en el backend, sincronizar localmente
+        } else {
+          // Otro error, mostrar mensaje pero continuar con actualización local
+          Alert.alert("Advertencia", "No se pudo actualizar el estado en el servidor, pero se actualizó localmente.");
+        }
       }
 
       // Actualizar en AsyncStorage local

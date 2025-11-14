@@ -300,10 +300,17 @@ class ActualizarEstadoPedidoView(APIView):
                         status=status.HTTP_403_FORBIDDEN,
                     )
             # Para marcar como en_camino, el pedido debe estar aceptado o en preparación
+            # O si ya está en_camino y asignado a este repartidor (idempotencia)
             elif nuevo_estado == 'en_camino':
-                if pedido.estado not in ['aceptado', 'en_preparacion']:
+                if pedido.estado not in ['aceptado', 'en_preparacion', 'en_camino']:
                     return Response(
                         {'detail': 'Solo podés marcar como en camino pedidos que estén aceptados o en preparación.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                # Si ya está en_camino, verificar que esté asignado a este repartidor
+                if pedido.estado == 'en_camino' and pedido.repartidor != request.user:
+                    return Response(
+                        {'detail': 'Este pedido ya está en camino y asignado a otro repartidor.'},
                         status=status.HTTP_403_FORBIDDEN,
                     )
         else:
