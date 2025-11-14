@@ -1,7 +1,8 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from '../theme/ThemeProvider';
 import API from "../api/api";
 
@@ -10,7 +11,8 @@ export default function HomeRepartidorScreen({ navigation }) {
   const [pedidoActivo, setPedidoActivo] = useState(null);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(theme, insets);
 
   // Formatear pedidos del backend al formato esperado por el frontend
   const formatearPedido = useCallback((pedido) => {
@@ -150,6 +152,31 @@ export default function HomeRepartidorScreen({ navigation }) {
     }
   }, []);
 
+  // Cerrar sesión
+  const handleLogout = () => {
+    Alert.alert("Cerrar sesión", "¿Querés cerrar la sesión actual?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Cerrar sesión",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await AsyncStorage.multiRemove([
+              "accessToken",
+              "refreshToken",
+              "user",
+              "pedidosRepartidor",
+            ]);
+          } catch (storageError) {
+            console.error("Error al limpiar la sesión:", storageError);
+          } finally {
+            navigation.replace("Login");
+          }
+        },
+      },
+    ]);
+  };
+
   // Navegar a pantalla de pedido activo si existe
   useEffect(() => {
     if (pedidoActivo) {
@@ -220,41 +247,67 @@ export default function HomeRepartidorScreen({ navigation }) {
             renderItem={renderItem}
             refreshing={loading}
             onRefresh={loadPedidosDisponibles}
+            contentContainerStyle={{ paddingBottom: 80 }}
           />
         )}
       </View>
+      <TouchableOpacity style={styles.logoutFab} onPress={handleLogout}>
+        <Text style={styles.logoutFabText}>🚪 Cerrar sesión</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme) => 
-  StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: theme.colors.background, },
-  container: { flex: 1, padding: 20, backgroundColor: theme.colors.background, },
-  header: { fontSize: 22, fontWeight: "700", marginBottom: 12, marginTop: 8, color: theme.colors.text, },
-  card: { padding: 14, backgroundColor: theme.colors.surface, shadowColor: '#000', borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border, },
-  title: { fontSize: 18, fontWeight: "600", color: theme.colors.text, },
-  buttons: { flexDirection: "row", marginTop: 10, gap: 10 },
-  accept: { flex: 1, backgroundColor: "#2E7D32", padding: 10, borderRadius: 6 },
-  reject: { flex: 1, backgroundColor: "#C62828", padding: 10, borderRadius: 6 },
-  btnText: { color: "#fff", textAlign: "center", fontWeight: "600" },
-  emptyState: {
-    marginTop: 32,
-    padding: 24,
-    borderRadius: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#1E88E5", textAlign: "center" },
-  emptySubtitle: { fontSize: 14, color: "#546E7A", textAlign: "center", marginTop: 8 },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 50,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-});
+const createStyles = (theme, insets) => {
+  const bottomInset = insets?.bottom ?? 0;
+  return StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.colors.background, },
+    container: { flex: 1, padding: 20, backgroundColor: theme.colors.background, },
+    header: { fontSize: 22, fontWeight: "700", marginBottom: 12, marginTop: 8, color: theme.colors.text, },
+    card: { padding: 14, backgroundColor: theme.colors.surface, shadowColor: '#000', borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border, },
+    title: { fontSize: 18, fontWeight: "600", color: theme.colors.text, },
+    buttons: { flexDirection: "row", marginTop: 10, gap: 10 },
+    accept: { flex: 1, backgroundColor: "#2E7D32", padding: 10, borderRadius: 6 },
+    reject: { flex: 1, backgroundColor: "#C62828", padding: 10, borderRadius: 6 },
+    btnText: { color: "#fff", textAlign: "center", fontWeight: "600" },
+    emptyState: {
+      marginTop: 32,
+      padding: 24,
+      borderRadius: 12,
+      backgroundColor: "#F5F5F5",
+    },
+    emptyTitle: { fontSize: 16, fontWeight: "700", color: "#1E88E5", textAlign: "center" },
+    emptySubtitle: { fontSize: 14, color: "#546E7A", textAlign: "center", marginTop: 8 },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 50,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: theme.colors.textSecondary,
+    },
+    logoutFab: {
+      position: "absolute",
+      right: 20,
+      bottom: 24 + bottomInset,
+      backgroundColor: "#C62828",
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderRadius: 28,
+      shadowColor: "#000",
+      shadowOpacity: 0.3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 8,
+      zIndex: 1000,
+    },
+    logoutFabText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 14,
+    },
+  });
+};

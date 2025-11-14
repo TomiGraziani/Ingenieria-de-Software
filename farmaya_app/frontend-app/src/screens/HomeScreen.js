@@ -424,6 +424,32 @@ export default function HomeScreen({ navigation }) {
     return () => clearInterval(interval);
   }, [loadOrders]);
 
+  // Cerrar sesión
+  const handleLogout = () => {
+    Alert.alert("Cerrar sesión", "¿Querés cerrar la sesión actual?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Cerrar sesión",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const storageKey = await getClienteOrdersStorageKey();
+            await AsyncStorage.multiRemove([
+              "accessToken",
+              "refreshToken",
+              "user",
+              storageKey,
+            ]);
+          } catch (storageError) {
+            console.error("Error al limpiar la sesión:", storageError);
+          } finally {
+            navigation.replace("Login");
+          }
+        },
+      },
+    ]);
+  };
+
   const hasActiveOrder = Boolean(activeOrder);
   const rawStatus = hasActiveOrder ? (activeOrder?.estado || '').toString().toLowerCase() : null;
   const activeStatus = hasActiveOrder ? normalizeStatus(activeOrder?.estado) : null;
@@ -599,7 +625,10 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <TouchableOpacity style={styles.logoutFab} onPress={handleLogout}>
+        <Text style={styles.logoutFabText}>🚪 Cerrar sesión</Text>
+      </TouchableOpacity>
       <Modal
         visible={noEntregadoModalVisible && noEntregadoOrder !== null}
         transparent={true}
@@ -1041,6 +1070,26 @@ const createStyles = (theme, insets) => {
     },
     footerButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     footerText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+    logoutFab: {
+      position: "absolute",
+      right: 16,
+      bottom: 120 + bottomInset,
+      backgroundColor: "#C62828",
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 24,
+      shadowColor: "#000",
+      shadowOpacity: 0.4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 10,
+      zIndex: 1000,
+    },
+    logoutFabText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 14,
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',
