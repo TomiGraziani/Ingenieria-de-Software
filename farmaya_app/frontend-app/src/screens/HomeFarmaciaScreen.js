@@ -40,8 +40,6 @@ export default function HomeFarmaciaScreen({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pedidoProcesando, setPedidoProcesando] = useState(null);
-  const [noEntregadoPedido, setNoEntregadoPedido] = useState(null);
-  const [noEntregadoModalVisible, setNoEntregadoModalVisible] = useState(false);
 
   // Modal de edición
   const [modalVisible, setModalVisible] = useState(false);
@@ -126,17 +124,6 @@ export default function HomeFarmaciaScreen({ navigation }) {
       });
 
       setPedidos(pendientes);
-
-      // Buscar pedidos no entregados
-      const noEntregado = pedidosNormalizados.find(
-        (pedido) => (pedido?.estado || "").toString().toLowerCase() === "no_entregado"
-      );
-      if (noEntregado) {
-        setNoEntregadoPedido(noEntregado);
-        setNoEntregadoModalVisible(true);
-      } else {
-        setNoEntregadoPedido(null);
-      }
     } catch (error) {
       console.error("❌ Error al cargar pedidos:", error.response?.data || error);
     }
@@ -594,27 +581,6 @@ export default function HomeFarmaciaScreen({ navigation }) {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      <Modal
-        visible={noEntregadoModalVisible && noEntregadoPedido !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setNoEntregadoModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.noEntregadoModalContent}>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setNoEntregadoModalVisible(false)}
-            >
-              <Text style={styles.modalCloseButtonText}>✕</Text>
-            </TouchableOpacity>
-            <Text style={styles.noEntregadoModalTitle}>❌ Producto no fue entregado</Text>
-            <Text style={styles.noEntregadoModalMotivo}>
-              Motivo: {noEntregadoPedido?.motivo_no_entrega || 'No se especificó motivo'}
-            </Text>
-          </View>
-        </View>
-      </Modal>
       <View style={styles.section}>
         <Text style={styles.title}>🏥 {farmacia?.nombre}</Text>
         <Text style={styles.info}>📍 {farmacia?.direccion}</Text>
