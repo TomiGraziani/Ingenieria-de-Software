@@ -1,0 +1,13 @@
+id,title,overview,genres,release_year,vote_average,poster_url
+1,La llegada,Una lingüista investiga la llegada de naves extraterrestres,Drama|Ciencia ficción,2016,7.9,https://image.tmdb.org/t/p/w500/arrival.jpg
+2,Interstellar,Exploradores viajan a través de un agujero de gusano para salvar a la humanidad,Ciencia ficción|Aventura,2014,8.6,https://image.tmdb.org/t/p/w500/interstellar.jpg
+3,El padrino,La historia de una familia mafiosa italoamericana,Crimen|Drama,1972,9.2,https://image.tmdb.org/t/p/w500/godfather.jpg
+4,Wall-E,Un robot recolector de basura descubre el significado del amor,Animación|Familia,2008,8.4,https://image.tmdb.org/t/p/w500/walle.jpg
+5,La La Land,Un músico y una actriz buscan sus sueños en Los Ángeles,Romance|Drama,2016,8.0,https://image.tmdb.org/t/p/w500/lalaland.jpg
+6,Parasite,Una familia pobre se infiltra en la vida de una familia adinerada,Drama|Thriller,2019,8.5,https://image.tmdb.org/t/p/w500/parasite.jpg
+7,Inception,Un ladrón roba secretos a través de los sueños,Ciencia ficción|Acción,2010,8.7,https://image.tmdb.org/t/p/w500/inception.jpg
+8,El viaje de Chihiro,Una niña queda atrapada en un mundo mágico,Animación|Fantasía,2001,8.5,https://image.tmdb.org/t/p/w500/chihiro.jpg
+9,Coco,Un niño viaja al mundo de los muertos para conocer la historia de su familia,Animación|Familia,2017,8.4,https://image.tmdb.org/t/p/w500/coco.jpg
+10,Whiplash,Un baterista joven busca la perfección bajo un instructor implacable,Drama|Música,2014,8.5,https://image.tmdb.org/t/p/w500/whiplash.jpg
+11,Mad Max: Fury Road,Un futuro postapocalíptico lleno de persecuciones y rebeliones,Acción|Aventura,2015,8.1,https://image.tmdb.org/t/p/w500/madmax.jpg
+12,The Matrix,Un hacker descubre la verdad sobre su realidad,Acción|Ciencia ficción,1999,8.7,https://image.tmdb.org/t/p/w500/matrix.jpg
